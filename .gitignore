@@ -1,0 +1,82 @@
+# ------------------------
+# Dependencies
+# ------------------------
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# ------------------------
+# Build output
+# ------------------------
+dist/
+build/
+coverage/
+client/dist/
+server/dist/
+
+# ------------------------
+# Logs
+# ------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------
+# Environment files
+# ------------------------
+.env
+.env.*
+!.env.example
+!.env*.example
+
+# ------------------------
+# OS / Editor
+# ------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ------------------------
+# TypeScript
+# ------------------------
+*.tsbuildinfo
+
+# ------------------------
+# Vite
+# ------------------------
+vite.config.ts.timestamp-*
+.vite/
+
+# ------------------------
+# Testing
+# ------------------------
+coverage/
+.nyc_output/
+
+# ------------------------
+# Temporary files
+# ------------------------
+tmp/
+temp/
+*.tmp
+
+# ------------------------
+# Runtime / local DB / caches
+# ------------------------
+.cache/
+.eslintcache
+.parcel-cache/
+
+# ------------------------
+# Package manager lockfiles
+# Keep these if you use npm consistently
+# ------------------------
+# package-lock.json
+# client/package-lock.json
+# server/package-lock.json
