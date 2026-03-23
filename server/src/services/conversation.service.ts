@@ -169,6 +169,7 @@ class ConversationService {
     status?: string;
     channel?: string;
     assigneeUserId?: string;
+    needsHuman?: boolean;
     search?: string;
   }) {
     const query: Record<string, unknown> = {
@@ -183,6 +184,12 @@ class ConversationService {
     }
     if (filters.assigneeUserId) {
       query.assigneeUserId = filters.assigneeUserId;
+    }
+    if (filters.needsHuman) {
+      query.$or = [
+        { aiState: { $in: ["needs_human", "human_requested", "human_active"] } },
+        { tags: "needs_human" },
+      ];
     }
     if (filters.search) {
       query.lastMessageText = { $regex: filters.search, $options: "i" };
@@ -262,6 +269,7 @@ class ConversationService {
     }
 
     conversation.status = "pending";
+    conversation.aiState = "needs_human";
     if (!conversation.tags.includes("needs_human")) {
       conversation.tags.push("needs_human");
     }

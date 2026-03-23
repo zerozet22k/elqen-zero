@@ -12,8 +12,12 @@ import { requireRole } from "../../middleware/require-role";
 import {
   WORKSPACE_MEMBER_ROLES,
   UserModel,
+  WorkspaceMembershipDocument,
   WorkspaceMembershipModel,
+  WorkspaceModel,
 } from "../../models";
+import { workspaceInviteService } from "../../services/workspace-invite.service";
+import { emailService } from "../../services/email.service";
 
 const router = Router();
 
@@ -35,6 +39,69 @@ const workspaceParamSchema = z.object({
 const memberParamSchema = z.object({
   memberId: z.string().min(1),
 });
+
+const serializeMembershipWithUser = async (membership: WorkspaceMembershipDocument) => {
+  const user = await UserModel.findById(membership.userId);
+
+  return {
+    _id: String(membership._id),
+    workspaceId: String(membership.workspaceId),
+    role: membership.role,
+    status: membership.status,
+    invitedByUserId: membership.invitedByUserId
+      ? String(membership.invitedByUserId)
+      : null,
+    lastActiveAt: membership.lastActiveAt,
+    inviteExpiresAt: membership.inviteExpiresAt ?? null,
+    inviteEmailSentAt: membership.inviteEmailSentAt ?? null,
+    inviteAcceptedAt: membership.inviteAcceptedAt ?? null,
+    user: user
+      ? {
+          _id: String(user._id),
+          email: user.email,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+        }
+      : null,
+  };
+};
+
+const issueWorkspaceInvite = async (params: {
+  membership: WorkspaceMembershipDocument;
+  workspaceName: string;
+  inviterName?: string | null;
+}) => {
+  const user = await UserModel.findById(params.membership.userId);
+  if (!user) {
+    throw new NotFoundError("Invited user not found");
+  }
+
+  const inviteToken = workspaceInviteService.createInviteToken();
+  const inviteExpiresAt = workspaceInviteService.buildInviteExpiry();
+  params.membership.inviteTokenHash = workspaceInviteService.hashInviteToken(inviteToken);
+  params.membership.inviteExpiresAt = inviteExpiresAt;
+  params.membership.inviteAcceptedAt = null;
+
+  const inviteUrl = workspaceInviteService.buildInviteUrl(inviteToken);
+  const emailResult = await emailService.sendWorkspaceInvitation({
+    toEmail: user.email,
+    toName: user.name,
+    workspaceName: params.workspaceName,
+    inviterName: params.inviterName,
+    inviteUrl,
+    role: params.membership.role,
+  });
+
+  params.membership.inviteEmailSentAt = emailResult.sent ? new Date() : null;
+  await params.membership.save();
+
+  return {
+    inviteUrl,
+    emailSent: emailResult.sent,
+    emailSkipped: emailResult.skipped,
+    emailReason: emailResult.reason ?? null,
+  };
+};
 
 router.use("/:workspaceId/members", requireWorkspace);
 
@@ -60,6 +127,9 @@ router.get(
         ? String(membership.invitedByUserId)
         : null,
       lastActiveAt: membership.lastActiveAt,
+      inviteExpiresAt: membership.inviteExpiresAt ?? null,
+      inviteEmailSentAt: membership.inviteEmailSentAt ?? null,
+      inviteAcceptedAt: membership.inviteAcceptedAt ?? null,
       user: (() => {
         const user = userMap.get(String(membership.userId));
         return user
@@ -85,6 +155,10 @@ router.post(
     const payload = createMemberSchema.parse(req.body);
 
     const email = payload.email.trim().toLowerCase();
+    const workspace = await WorkspaceModel.findById(req.workspace?._id);
+    if (!workspace) {
+      throw new NotFoundError("Workspace not found");
+    }
     let user = await UserModel.findOne({ email });
     if (!user) {
       user = await UserModel.create({
@@ -112,6 +186,10 @@ router.post(
       role: payload.role,
       status,
       invitedByUserId: req.auth?.userId ?? null,
+      inviteTokenHash: null,
+      inviteExpiresAt: null,
+      inviteEmailSentAt: null,
+      inviteAcceptedAt: null,
       lastActiveAt: null,
     });
 
@@ -120,21 +198,59 @@ router.post(
       await user.save();
     }
 
+    const inviter = req.auth?.userId ? await UserModel.findById(req.auth.userId) : null;
+    const inviteDelivery =
+      status === "invited"
+        ? await issueWorkspaceInvite({
+            membership,
+            workspaceName: workspace.name,
+            inviterName: inviter?.name ?? null,
+          })
+        : null;
+
     res.status(201).json({
-      membership: {
-        _id: String(membership._id),
-        workspaceId: String(membership.workspaceId),
-        role: membership.role,
-        status: membership.status,
-        invitedByUserId: membership.invitedByUserId
-          ? String(membership.invitedByUserId)
-          : null,
-      },
+      membership: await serializeMembershipWithUser(membership),
       user: {
         _id: String(user._id),
         email: user.email,
         name: user.name,
       },
+      inviteDelivery,
+    });
+  })
+);
+
+router.post(
+  "/:workspaceId/members/:memberId/resend-invite",
+  requireRole(["owner", "admin"]),
+  asyncHandler(async (req, res) => {
+    workspaceParamSchema.parse(req.params);
+    const { memberId } = memberParamSchema.parse(req.params);
+
+    const membership = await WorkspaceMembershipModel.findById(memberId);
+    if (!membership || String(membership.workspaceId) !== String(req.workspace?._id)) {
+      throw new NotFoundError("Workspace membership not found");
+    }
+
+    if (membership.status !== "invited") {
+      throw new ValidationError("Only invited members can receive a new invite link");
+    }
+
+    const workspace = await WorkspaceModel.findById(req.workspace?._id);
+    if (!workspace) {
+      throw new NotFoundError("Workspace not found");
+    }
+
+    const inviter = req.auth?.userId ? await UserModel.findById(req.auth.userId) : null;
+    const inviteDelivery = await issueWorkspaceInvite({
+      membership,
+      workspaceName: workspace.name,
+      inviterName: inviter?.name ?? null,
+    });
+
+    res.json({
+      membership: await serializeMembershipWithUser(membership),
+      inviteDelivery,
     });
   })
 );
@@ -175,6 +291,10 @@ router.patch(
         }
       }
       membership.status = patch.status;
+      if (patch.status !== "invited") {
+        membership.inviteTokenHash = null;
+        membership.inviteExpiresAt = null;
+      }
     }
 
     await membership.save();

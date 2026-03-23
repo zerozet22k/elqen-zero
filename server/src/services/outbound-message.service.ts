@@ -12,6 +12,29 @@ import { emitRealtimeEvent } from "../lib/realtime";
 
 class OutboundMessageService {
   private validateProviderOutboundCommand(channel: string, command: OutboundCommand) {
+    if (channel === "telegram") {
+      if (command.kind === "sticker") {
+        const platformStickerId = String(command.meta?.platformStickerId ?? "").trim();
+        if (!platformStickerId) {
+          throw new ValidationError("Telegram sticker outbound requires meta.platformStickerId");
+        }
+
+        if (/^AgAD[A-Za-z0-9_-]+$/.test(platformStickerId)) {
+          throw new ValidationError(
+            "Telegram rejected this sticker identifier. Use sticker file_id (usually starts with CAAC), not file_unique_id (starts with AgAD)."
+          );
+        }
+
+        if (!/^[A-Za-z0-9_-]{16,}$/.test(platformStickerId)) {
+          throw new ValidationError(
+            "Telegram sticker ID looks invalid. Use a full Telegram file_id from a real sticker message."
+          );
+        }
+      }
+
+      return;
+    }
+
     if (channel === "viber") {
       if (command.kind === "video") {
         const media = command.media?.[0];
@@ -97,7 +120,10 @@ class OutboundMessageService {
       requireActive: false,
     });
 
-    if (connection.status !== "active") {
+    const canSendDespiteErrorStatus =
+      connection.status === "error" && connection.verificationState === "verified";
+
+    if (connection.status !== "active" && !canSendDespiteErrorStatus) {
       throw new ValidationError(
         `Channel connection is ${connection.status}. Complete provider setup before sending.`
       );
@@ -208,7 +234,7 @@ class OutboundMessageService {
     }
 
     if (sendResult.status === "failed") {
-      await channelConnectionService.markConnectionError(
+      await channelConnectionService.markOutboundFailed(
         String(connection._id),
         sendResult.error ?? "Provider send failed"
       );

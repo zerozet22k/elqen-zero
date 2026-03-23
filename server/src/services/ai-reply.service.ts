@@ -7,20 +7,44 @@ import { knowledgeService, KnowledgeBundle } from "./knowledge.service";
 import { OutboundContentBlock } from "./outbound-content.types";
 import { filterOutboundBlocksForChannel } from "./outbound-content.utils";
 
+type AIAction = "send" | "review" | "handoff";
+
+type AIContactUpdates = {
+  phones?: string[];
+  deliveryAddress?: string;
+  aiNotes?: string;
+};
+
 type AIReplyResult =
   | {
-      kind: "canned" | "knowledge";
-      blocks: OutboundContentBlock[];
-      confidence: number;
-      sourceHints: string[];
-      reason: string;
-    }
+    kind: "canned" | "knowledge";
+    blocks: OutboundContentBlock[];
+    text?: string;
+    confidence: number;
+    sourceHints: string[];
+    reason: string;
+    internalNote?: string;
+    contactUpdates?: AIContactUpdates;
+  }
   | {
-      kind: "unsupported" | "low_confidence" | "requires_human";
-      confidence: number;
-      sourceHints: string[];
-      reason: string;
-    };
+    kind: "review";
+    blocks: OutboundContentBlock[];
+    text?: string;
+    confidence: number;
+    sourceHints: string[];
+    reason: string;
+    internalNote: string;
+    contactUpdates?: AIContactUpdates;
+  }
+  | {
+    kind: "unsupported" | "low_confidence" | "requires_human";
+    confidence: number;
+    sourceHints: string[];
+    reason: string;
+    internalNote?: string;
+    draftBlocks?: OutboundContentBlock[];
+    contactUpdates?: AIContactUpdates;
+  };
 
 class AIReplyService {
   async generateReply(params: {
@@ -32,18 +56,20 @@ class AIReplyService {
       senderType: string;
       kind: string;
       text?: { body?: string };
-      media?: Array<{ url?: string; filename?: string }>; 
+      media?: Array<{ url?: string; filename?: string }>;
       createdAt: Date;
     }>;
-    /**
-     * Optional workspace-owned Gemini credentials.
-     * `encryptedApiKey` is the value from AISettings.geminiApiKey (stored encrypted).
-     * `modelOverride` is the plain workspace model name override.
-     * When provided, these take priority over deployment-level env vars.
-     */
     workspaceAiOverride?: {
       encryptedApiKey?: string;
       modelOverride?: string;
+      assistantInstructions?: string;
+    };
+    contactProfile?: {
+      primaryName?: string;
+      phones?: string[];
+      deliveryAddress?: string;
+      notes?: string;
+      aiNotes?: string;
     };
   }): Promise<AIReplyResult> {
     if (params.message.kind === "unsupported") {
@@ -56,21 +82,10 @@ class AIReplyService {
     }
 
     const incomingText = this.normalizeText(params.message.text?.body);
-    const inferredMediaText = this.buildMediaIntentText(params.message);
-    const effectiveIncomingText = incomingText || inferredMediaText;
-    
-    // If message has media but no text, escalate to human (no vision processing to save costs)
-    if (!effectiveIncomingText && ["image", "video", "file"].includes(params.message.kind)) {
-      return {
-        kind: "requires_human",
-        confidence: 0.4,
-        sourceHints: [],
-        reason: `Message contains ${params.message.kind} without text context. Human review needed.`,
-      };
-    }
+    const mediaContextText = this.buildMediaContextText(params.message);
+    const retrievalText = incomingText || mediaContextText;
 
-    // If no text and not media, cannot process
-    if (!effectiveIncomingText) {
+    if (!retrievalText) {
       return {
         kind: "requires_human",
         confidence: 0.2,
@@ -81,14 +96,15 @@ class AIReplyService {
 
     const [cannedReplies, knowledgeItems] = await Promise.all([
       cannedReplyService.listActive(params.workspaceId),
-      knowledgeService.selectRelevantBundles(params.workspaceId, effectiveIncomingText, {
-        maxItems: 4,
-        maxBundles: 3,
+      knowledgeService.selectRelevantBundles(params.workspaceId, retrievalText, {
+        maxItems: 8,
+        maxBundles: 8,
+        useEntireLibraryWhenTotalItemsAtMost: 24,
       }),
     ]);
 
     const cannedResult = this.tryCannedReply({
-      incomingText: effectiveIncomingText,
+      incomingText: retrievalText,
       channel: params.channel,
       cannedReplies,
     });
@@ -97,27 +113,24 @@ class AIReplyService {
       return cannedResult;
     }
 
-    const geminiResult = await this.tryKnowledgeReply({
-      incomingText: effectiveIncomingText,
+    const codexResult = await this.tryKnowledgeReply({
+      incomingText,
+      mediaContextText,
       conversationId: params.conversationId,
       recentMessages: params.recentMessages,
       knowledgeBundles: knowledgeItems,
       workspaceAiOverride: params.workspaceAiOverride,
+      contactProfile: params.contactProfile,
     });
 
     if (
-      geminiResult.kind === "knowledge" &&
-      geminiResult.blocks.length > 0
+      (codexResult.kind === "knowledge" || codexResult.kind === "review") &&
+      codexResult.blocks.length > 0
     ) {
-      return geminiResult;
+      return codexResult;
     }
 
-    return {
-      kind: "requires_human",
-      confidence: 0.3,
-      sourceHints: [],
-      reason: geminiResult.reason || "AI confidence is too low. Escalating to human agent for review.",
-    };
+    return codexResult;
   }
 
   private tryCannedReply(params: {
@@ -149,6 +162,8 @@ class AIReplyService {
         return {
           kind: "canned",
           blocks: compatibleBlocks,
+          text:
+            compatibleBlocks.find((block) => block.kind === "text")?.text?.body ?? undefined,
           confidence: 0.95,
           sourceHints: [reply.title],
           reason: `Matched canned reply trigger "${matchedTrigger}"`,
@@ -161,6 +176,7 @@ class AIReplyService {
 
   private async tryKnowledgeReply(params: {
     incomingText: string;
+    mediaContextText: string;
     conversationId?: string;
     recentMessages?: Array<{
       senderType: string;
@@ -173,21 +189,26 @@ class AIReplyService {
     workspaceAiOverride?: {
       encryptedApiKey?: string;
       modelOverride?: string;
+      assistantInstructions?: string;
+    };
+    contactProfile?: {
+      primaryName?: string;
+      phones?: string[];
+      deliveryAddress?: string;
+      notes?: string;
+      aiNotes?: string;
     };
   }): Promise<AIReplyResult> {
-    // Resolve API key from workspace-owned settings only.
     const encryptionSecret = env.FIELD_ENCRYPTION_KEY || env.SESSION_SECRET;
     const workspaceDecryptedKey = params.workspaceAiOverride?.encryptedApiKey
       ? decryptField(params.workspaceAiOverride.encryptedApiKey, encryptionSecret)
       : "";
 
-    const geminiApiKey = workspaceDecryptedKey.trim();
-
-    // Resolve model: workspace override → deployment env → built-in default.
+    const geminiApiKey = workspaceDecryptedKey.trim() || env.GEMINI_API_KEY.trim();
     const geminiModel =
-      (params.workspaceAiOverride?.modelOverride?.trim() ||
-        env.GEMINI_MODEL?.trim() ||
-        "gemini-2.0-flash-lite");
+      params.workspaceAiOverride?.modelOverride?.trim() ||
+      env.GEMINI_MODEL.trim() ||
+      "gemini-3.1-flash-lite-preview";
 
     if (!geminiApiKey) {
       return {
@@ -199,7 +220,7 @@ class AIReplyService {
     }
 
     try {
-      console.log("[AI] calling Gemini with model:", geminiModel);
+      console.log("[AI:gemini] calling model:", geminiModel);
 
       const response = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`,
@@ -209,10 +230,13 @@ class AIReplyService {
               role: "user",
               parts: [
                 {
-                  text: this.buildGeminiPrompt({
+                  text: this.buildAssistantPrompt({
                     incomingText: params.incomingText,
+                    mediaContextText: params.mediaContextText,
                     recentMessages: params.recentMessages,
                     knowledgeBundles: params.knowledgeBundles,
+                    assistantInstructions: params.workspaceAiOverride?.assistantInstructions,
+                    contactProfile: params.contactProfile,
                   }),
                 },
               ],
@@ -231,35 +255,63 @@ class AIReplyService {
         }
       );
 
-      const result = this.parseGeminiResult(response.data);
+      const result = this.parseAssistantResult(response.data);
+      const messageBlocks = this.buildTextBlocks(result.messages);
+      const combinedText = this.combineMessages(result.messages);
 
-      if (!result.messages.length) {
+      if (result.action === "review" && messageBlocks.length) {
+        return {
+          kind: "review",
+          blocks: messageBlocks,
+          text: combinedText || undefined,
+          confidence: result.confidence,
+          sourceHints: result.sourceHints,
+          reason: result.reason || "Gemini prepared a draft reply that should be verified by a human",
+          internalNote:
+            result.internalNote ||
+            "Please review this draft before sending it to the customer.",
+          contactUpdates: result.contactUpdates,
+        };
+      }
+
+      if (result.action === "handoff") {
+        return {
+          kind: "requires_human",
+          confidence: result.confidence,
+          sourceHints: result.sourceHints,
+          reason: result.reason || "Gemini recommended human handling",
+          internalNote: result.internalNote || undefined,
+          draftBlocks: messageBlocks.length ? messageBlocks : undefined,
+          contactUpdates: result.contactUpdates,
+        };
+      }
+
+      if (!messageBlocks.length) {
         return {
           kind: "low_confidence",
           confidence: 0.2,
           sourceHints: [],
           reason: result.reason || "Gemini did not return a usable reply",
+          internalNote: result.internalNote || undefined,
+          contactUpdates: result.contactUpdates,
         };
       }
 
       return {
         kind: "knowledge",
-        blocks: result.messages.map((message) => ({
-          kind: "text" as const,
-          text: {
-            body: message,
-            plain: message,
-          },
-        })),
+        blocks: messageBlocks,
+        text: combinedText || undefined,
         confidence: result.confidence,
         sourceHints: result.sourceHints,
         reason: result.reason || "Gemini generated a reply from provided context",
+        internalNote: result.internalNote || undefined,
+        contactUpdates: result.contactUpdates,
       };
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        console.error("[AI] Gemini error response:", error.response?.data);
+        console.error("[AI:gemini] error response:", error.response?.data);
       } else {
-        console.error("[AI] Gemini error:", error);
+        console.error("[AI:gemini] error:", error);
       }
 
       return {
@@ -267,15 +319,29 @@ class AIReplyService {
         confidence: 0.2,
         sourceHints: [],
         reason:
-          error instanceof Error
-            ? `Gemini request failed: ${error.message}`
-            : "Gemini request failed",
+          error instanceof Error ? `Gemini request failed: ${error.message}` : "Gemini request failed",
       };
     }
   }
 
-  private buildGeminiPrompt(params: {
+  private buildWorkspaceInstructionSection(assistantInstructions?: string) {
+    const lines = assistantInstructions
+      ?.split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0);
+
+    return [
+      "Workspace operating instructions:",
+      ...(lines?.length
+        ? lines
+        : [
+          "[None provided. Stay neutral, avoid assumptions, and use review or handoff when workspace-specific policy is required.]",
+        ]),
+    ];
+  }
+  private buildAssistantPrompt(params: {
     incomingText: string;
+    mediaContextText: string;
     recentMessages?: Array<{
       senderType: string;
       kind: string;
@@ -284,6 +350,14 @@ class AIReplyService {
       createdAt: Date;
     }>;
     knowledgeBundles: KnowledgeBundle[];
+    assistantInstructions?: string;
+    contactProfile?: {
+      primaryName?: string;
+      phones?: string[];
+      deliveryAddress?: string;
+      notes?: string;
+      aiNotes?: string;
+    };
   }) {
     const historyLines = (params.recentMessages ?? []).map((message) => {
       let content = "";
@@ -311,48 +385,79 @@ class AIReplyService {
         message.senderType === "customer"
           ? "customer"
           : message.senderType === "agent"
-          ? "agent"
-          : message.senderType === "automation"
-          ? "automation"
-          : message.senderType === "ai"
-          ? "ai"
-          : "system";
+            ? "agent"
+            : message.senderType === "automation"
+              ? "automation"
+              : message.senderType === "ai"
+                ? "ai"
+                : "system";
 
       return `- ${speaker}: ${content}`;
     });
 
+    const contactProfileLines = this.buildContactProfileLines(params.contactProfile);
+
     return [
-      "You are assisting an ecommerce seller inbox.",
-      "Use only the provided context items and recent conversation history.",
-      "Do not invent products, prices, shipping timelines, or policies.",
-      "If business-specific context is missing, you may still send a short safe reply, acknowledge the message, or ask one clarifying question.",
-      "Do not claim facts that are not present in the conversation or knowledge items.",
-      "Keep the reply concise, customer-friendly, and directly useful.",
-      "You may return 1 to 3 short customer-facing messages when that is clearer than one long paragraph.",
-      'Return strict JSON with keys: messages, confidence, sourceHints, reason.',
-      'messages must be an array of 1 to 3 non-empty strings, each suitable to send as a separate chat message.',
+      "You are Gemini, the inbox assistant.",
+      ...this.buildWorkspaceInstructionSection(params.assistantInstructions),
       "",
-      "Recent conversation history:",
+      "Core protocol:",
+      "Use only the context blocks in this prompt.",
+      "Ground factual claims in the provided context. Do not invent or assume facts that are not present.",
+      "Prefer the exact wording and facts from the most relevant knowledge library matches when available.",
+      "If knowledge matches conflict, prefer the most specific and most directly relevant match.",
+      "Do not claim to have inspected attachment contents unless the attachment context explicitly describes them.",
+      "Do not invent prices, grades, subjects, policies, promotions, warranty terms, payment confirmation, verification results, delivery progress, or fulfillment status.",
+      "If the customer explicitly provides reusable profile details such as phone number, delivery address, or stable preferences, capture them in contactUpdates.",
+      "Use aiNotes only for a short reusable internal memory grounded in customer-provided details.",
+      "Keep customer-facing messages concise, helpful, warm, and ready to send.",
+      "Prefer a single customer-facing message. Split into multiple messages only when it clearly improves clarity.",
+      "Do not mention AI, bot, automation, prompt, memory, internal logic, developer mode, testing mode, or system behavior in customer-facing messages.",
+      "Do not explain an earlier message as being caused by automation, AI behavior, system logic, or memory.",
+      "If the customer asks a meta question about an earlier confusing message, apologize briefly and provide only the current customer-facing status or next step.",
+      "If the current customer message indicates payment, receipt submission, transfer proof, or a payment confirmation request, and the provided context does not explicitly confirm verification, do not assume payment is verified.",
+      "In that case, prefer a short send-ready reply stating that staff will check and confirm.",
+      "Do not claim fulfillment, delivery, sending, preparation, scheduling, or completion unless the provided context explicitly states that.",
+      "When payment or verification is staff-dependent but a safe waiting message can be written from the provided context, prefer action 'send' over 'review'.",
+      "Use action 'send' for a safe send-ready reply.",
+      "Use action 'review' when a staff-ready draft can be created but a human should verify or approve it before sending.",
+      "Use action 'handoff' when no responsible draft can be created from the provided context.",
+      "When action is 'review' or 'handoff', internalNote must tell staff exactly what to verify, decide, or do next.",
+      "Return strict JSON with keys: action, messages, confidence, sourceHints, reason, internalNote, contactUpdates.",
+      'action must be one of: "send", "review", "handoff".',
+      'messages must be an array of 0 to 3 non-empty strings, each suitable to send as a separate chat message.',
+      'Use 0 messages only when action is "handoff" and no safe draft should be suggested.',
+      'internalNote must be a short staff-facing note when action is "review" or "handoff". Return an empty string when action is "send".',
+      'sourceHints should list the most relevant knowledge titles used when available.',
+      'contactUpdates must be an object. Use only these optional keys when they are explicitly supported by the context: phones, deliveryAddress, aiNotes.',
+      'Use an empty object for contactUpdates when no profile update is warranted.',
+      "",
+      "Context type: recent conversation history",
       ...(historyLines.length ? historyLines : ["- [No recent history]"]),
       "",
-      `Customer message: ${params.incomingText}`,
+      "Context type: customer profile",
+      ...contactProfileLines,
       "",
-      "Ranked knowledge bundles:",
+      "Context type: current customer message",
+      `- Text: ${params.incomingText || "[No text provided]"}`,
+      `- Attachment context: ${params.mediaContextText || "[No attachment context]"}`,
+      "",
+      "Context type: knowledge library matches",
       ...(params.knowledgeBundles.length
         ? params.knowledgeBundles.flatMap((bundle, index) => [
-            `${index + 1}. Bundle: ${bundle.title}`,
-            ...bundle.items.map(
-              (item, itemIndex) =>
-                `   ${itemIndex + 1}) ${item.title}\n   Tags: ${item.tags.join(", ")}\n   Score: ${item.score.toFixed(2)}\n   ${item.content}`
-            ),
-          ])
-        : ["[No strongly relevant active knowledge items were found for this message]"]),
+          `${index + 1}. Knowledge library bundle: ${bundle.title}`,
+          ...bundle.items.map(
+            (item, itemIndex) =>
+              `   ${itemIndex + 1}) ${item.title}\n   Tags: ${item.tags.join(", ")}\n   Score: ${item.score.toFixed(2)}\n   ${item.content}`
+          ),
+        ])
+        : ["[No strongly relevant active knowledge library matches were found for this message]"]),
       "",
       "Respond only with valid JSON and make the response suitable for customer messaging.",
     ].join("\n");
   }
 
-  private parseGeminiResult(data: unknown) {
+  private parseAssistantResult(data: unknown) {
     const rawText =
       (data as {
         candidates?: Array<{
@@ -369,10 +474,13 @@ class AIReplyService {
 
     if (!rawText) {
       return {
+        action: "handoff" as const,
         messages: [] as string[],
         confidence: 0.2,
         sourceHints: [] as string[],
         reason: "Gemini returned an empty response",
+        internalNote: "",
+        contactUpdates: undefined,
       };
     }
 
@@ -384,19 +492,43 @@ class AIReplyService {
 
     try {
       const parsed = JSON.parse(normalized) as {
+        action?: AIAction;
         messages?: string[];
+        replyText?: string;
         confidence?: number;
         sourceHints?: string[];
         reason?: string;
+        internalNote?: string;
+        contactUpdates?: {
+          phones?: unknown;
+          deliveryAddress?: unknown;
+          aiNotes?: unknown;
+        };
       };
 
+      const messages = Array.isArray(parsed.messages)
+        ? parsed.messages
+        : typeof parsed.replyText === "string"
+          ? [parsed.replyText]
+          : [];
+
+      const action: AIAction =
+        parsed.action === "send" ||
+          parsed.action === "review" ||
+          parsed.action === "handoff"
+          ? parsed.action
+          : messages.length > 0
+            ? "send"
+            : "handoff";
+
+      const contactUpdates = this.normalizeContactUpdates(parsed.contactUpdates);
+
       return {
-        messages: Array.isArray(parsed.messages)
-          ? parsed.messages
-              .map((item) => String(item).trim())
-              .filter((item) => item.length > 0)
-              .slice(0, 3)
-          : [],
+        action,
+        messages: messages
+          .map((item) => String(item).trim())
+          .filter((item) => item.length > 0)
+          .slice(0, 3),
         confidence:
           typeof parsed.confidence === "number"
             ? Math.max(0, Math.min(1, parsed.confidence))
@@ -405,22 +537,104 @@ class AIReplyService {
           ? parsed.sourceHints.map((item) => String(item))
           : [],
         reason: parsed.reason ?? "Gemini generated a reply from provided context",
+        internalNote:
+          typeof parsed.internalNote === "string" ? parsed.internalNote.trim() : "",
+        contactUpdates,
       };
     } catch {
       return {
+        action: "handoff" as const,
         messages: [] as string[],
         confidence: 0.2,
         sourceHints: [] as string[],
         reason: "Gemini response was not valid JSON",
+        internalNote: "",
+        contactUpdates: undefined,
       };
     }
+  }
+
+  private buildTextBlocks(messages: string[]) {
+    const combined = this.combineMessages(messages);
+    if (!combined) {
+      return [];
+    }
+
+    return [
+      {
+        kind: "text" as const,
+        text: {
+          body: combined,
+          plain: combined,
+        },
+      },
+    ];
+  }
+
+  private combineMessages(messages: string[]) {
+    return messages.map((message) => message.trim()).filter(Boolean).join("\n\n").trim();
+  }
+
+  private buildContactProfileLines(profile?: {
+    primaryName?: string;
+    phones?: string[];
+    deliveryAddress?: string;
+    notes?: string;
+    aiNotes?: string;
+  }) {
+    const lines = [
+      profile?.primaryName?.trim() ? `- Name: ${profile.primaryName.trim()}` : null,
+      profile?.phones?.length ? `- Phones: ${profile.phones.join(", ")}` : null,
+      profile?.deliveryAddress?.trim()
+        ? `- Delivery address: ${profile.deliveryAddress.trim()}`
+        : null,
+      profile?.notes?.trim() ? `- Team notes: ${profile.notes.trim()}` : null,
+      profile?.aiNotes?.trim() ? `- AI memory: ${profile.aiNotes.trim()}` : null,
+    ].filter((line): line is string => !!line);
+
+    return lines.length ? lines : ["- [No stored customer profile details]"];
+  }
+
+  private normalizeContactUpdates(value: {
+    phones?: unknown;
+    deliveryAddress?: unknown;
+    aiNotes?: unknown;
+  } | undefined): AIContactUpdates | undefined {
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+
+    const updates: AIContactUpdates = {};
+
+    if (Array.isArray(value.phones)) {
+      const phones = [
+        ...new Set(
+          value.phones
+            .map((item) => String(item).replace(/\s+/g, " ").trim())
+            .filter((item) => item.length > 0)
+        ),
+      ];
+      if (phones.length) {
+        updates.phones = phones;
+      }
+    }
+
+    if (typeof value.deliveryAddress === "string" && value.deliveryAddress.trim()) {
+      updates.deliveryAddress = value.deliveryAddress.trim();
+    }
+
+    if (typeof value.aiNotes === "string" && value.aiNotes.trim()) {
+      updates.aiNotes = value.aiNotes.trim();
+    }
+
+    return Object.keys(updates).length ? updates : undefined;
   }
 
   private normalizeText(value?: string | null) {
     return (value ?? "").trim().toLowerCase();
   }
 
-  private buildMediaIntentText(message: CanonicalMessage) {
+  private buildMediaContextText(message: CanonicalMessage) {
     if (!["image", "video", "file"].includes(message.kind)) {
       return "";
     }
@@ -429,6 +643,8 @@ class AIReplyService {
     const filename = firstMedia?.filename?.trim() ?? "";
     const mimeType = firstMedia?.mimeType?.toLowerCase() ?? "";
     const raw = (message.raw as Record<string, unknown> | undefined) ?? {};
+    const hasText = this.normalizeText(message.text?.body).length > 0;
+    const contextSuffix = hasText ? " alongside their text message" : " without any text";
 
     const isTelegramAnimation =
       message.channel === "telegram" &&
@@ -441,16 +657,44 @@ class AIReplyService {
 
     if (isTelegramAnimation || looksGifByName || looksGifByMime) {
       if (filename) {
-        return this.normalizeText(`customer sent an animation file named ${filename}`);
+        return this.normalizeText(
+          `customer sent an animation file named ${filename}${contextSuffix}`
+        );
       }
-      return this.normalizeText("customer sent an animation gif");
+      return this.normalizeText(`customer sent an animation gif${contextSuffix}`);
     }
 
     if (looksAnimationByName && message.kind === "video") {
-      return this.normalizeText(`customer sent a short animation video named ${filename}`);
+      return this.normalizeText(
+        `customer sent a short animation video named ${filename}${contextSuffix}`
+      );
     }
 
-    return "";
+    if (message.kind === "image") {
+      if (filename) {
+        return this.normalizeText(
+          `customer sent an image attachment named ${filename}${contextSuffix}`
+        );
+      }
+      return this.normalizeText(`customer sent an image attachment${contextSuffix}`);
+    }
+
+    if (message.kind === "video") {
+      if (filename) {
+        return this.normalizeText(
+          `customer sent a video attachment named ${filename}${contextSuffix}`
+        );
+      }
+      return this.normalizeText(`customer sent a video attachment${contextSuffix}`);
+    }
+
+    if (filename) {
+      return this.normalizeText(
+        `customer sent a file attachment named ${filename}${contextSuffix}`
+      );
+    }
+
+    return this.normalizeText(`customer sent a file attachment${contextSuffix}`);
   }
 
   private normalizeTriggers(triggers: string[]) {

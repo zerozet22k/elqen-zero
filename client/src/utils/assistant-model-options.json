@@ -1,0 +1,19 @@
+{
+  "models": [
+    {
+      "value": "gemini-3.1-flash-lite-preview",
+      "label": "Gemini 3.1 Flash Lite Preview",
+      "description": "Fast, lower-cost Gemini model for routine support and inbox replies."
+    },
+    {
+      "value": "gemini-2.5-flash",
+      "label": "Gemini 2.5 Flash",
+      "description": "Balanced Gemini model for higher-quality business replies and follow-up handling."
+    },
+    {
+      "value": "gemini-2.0-flash-lite",
+      "label": "Gemini 2.0 Flash Lite",
+      "description": "Lightweight Gemini option for cost-sensitive automation flows."
+    }
+  ]
+}

@@ -37,7 +37,10 @@ function ChannelIcon({ channel }: { channel: Conversation["channel"] }) {
           : "T";
 
   return (
-    <span title={channel} className="inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-slate-100">
+    <span
+      title={channel}
+      className="inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-slate-100"
+    >
       <img
         src={src}
         alt={channel}
@@ -76,6 +79,35 @@ const statusDotClass: Record<string, string> = {
   resolved: "bg-emerald-400",
 };
 
+function getActivityLabel(
+  conversation: Conversation,
+  currentUserId?: string | null
+) {
+  if (
+    conversation.aiState === "needs_human" ||
+    conversation.aiState === "human_requested"
+  ) {
+    return "Needs human";
+  }
+
+  if (conversation.aiState === "human_active") {
+    if (conversation.assignee?._id && conversation.assignee._id === currentUserId) {
+      return "Managed by you";
+    }
+    return conversation.assignee?.name
+      ? `Managed by ${conversation.assignee.name}`
+      : "Human active";
+  }
+
+  if (conversation.assignee?.name?.trim()) {
+    return conversation.assignee._id === currentUserId
+      ? "Managed by you"
+      : `Managed by ${conversation.assignee.name}`;
+  }
+
+  return "";
+}
+
 export function ConversationList(props: {
   conversations: Conversation[];
   selectedConversationId?: string;
@@ -112,15 +144,13 @@ export function ConversationList(props: {
         const platforms = Array.from(
           new Set([
             conversation.channel,
-            ...(conversation.contact?.channelIdentities?.map((identity) => identity.channel) ?? []),
+            ...(conversation.contact?.channelIdentities?.map(
+              (identity) => identity.channel
+            ) ?? []),
           ])
         );
 
-        const assigneeName = conversation.assignee?.name?.trim();
-        const isManagedByCurrentUser =
-          !!conversation.assignee?._id &&
-          !!props.currentUserId &&
-          conversation.assignee._id === props.currentUserId;
+        const activityLabel = getActivityLabel(conversation, props.currentUserId);
 
         return (
           <button
@@ -172,6 +202,7 @@ export function ConversationList(props: {
                   {formatTime(conversation.lastMessageAt)}
                 </span>
               </div>
+
               <div className="mt-0.5 flex items-center justify-between gap-1">
                 <p className="truncate text-xs text-slate-500">
                   {getPreviewText(conversation.lastMessageText)}
@@ -183,11 +214,9 @@ export function ConversationList(props: {
                 ) : null}
               </div>
 
-              {assigneeName ? (
+              {activityLabel ? (
                 <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                  {isManagedByCurrentUser
-                    ? "Managed by you"
-                    : `Managed by ${assigneeName}`}
+                  {activityLabel}
                 </p>
               ) : null}
             </div>

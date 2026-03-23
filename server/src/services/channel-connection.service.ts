@@ -449,6 +449,38 @@ class ChannelConnectionService {
     return connection;
   }
 
+  async markOutboundFailed(connectionId: string, message: string, attemptedAt = new Date()) {
+    const connection = await ChannelConnectionModel.findByIdAndUpdate(
+      connectionId,
+      {
+        $set: {
+          lastOutboundAt: attemptedAt,
+          lastError: message,
+          // Keep verified/runtime-ready connections active even when a specific
+          // outbound payload fails (e.g. invalid remote media identifier).
+          status: "active",
+        },
+      },
+      { new: true }
+    );
+
+    if (!connection) {
+      throw new NotFoundError("Channel connection not found");
+    }
+
+    emitRealtimeEvent("connection.updated", {
+      workspaceId: String(connection.workspaceId),
+      connectionId: String(connection._id),
+      channel: connection.channel,
+      status: connection.status,
+      verificationState: connection.verificationState,
+      lastError: connection.lastError,
+      lastOutboundAt: connection.lastOutboundAt,
+    });
+
+    return connection;
+  }
+
   async markConnectionError(connectionId: string, message: string) {
     const connection = await ChannelConnectionModel.findByIdAndUpdate(
       connectionId,

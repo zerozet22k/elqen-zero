@@ -129,7 +129,9 @@ export interface Contact {
   _id: string;
   primaryName: string;
   phones: string[];
+  deliveryAddress?: string;
   notes?: string;
+  aiNotes?: string;
   channelIdentities: Array<{
     channel: Channel;
     externalUserId: string;
@@ -186,12 +188,21 @@ export interface AISettings {
   workspaceId: string;
   enabled: boolean;
   autoReplyEnabled: boolean;
+  autoReplyMode: "none" | "all" | "after_hours_only" | "business_hours_only";
   afterHoursEnabled: boolean;
   confidenceThreshold: number;
   fallbackMessage: string;
+  assistantInstructions: string;
   geminiModel: string;
   hasGeminiApiKey: boolean;
   supportedChannels: Record<Channel, boolean>;
+}
+
+export interface ConversationPresenceEntry {
+  userId: string;
+  userName: string;
+  isComposing: boolean;
+  connectionCount?: number;
 }
 
 export interface BusinessHoursDay {
@@ -215,6 +226,9 @@ export interface AutomationState {
     _id: string;
     name: string;
     isActive: boolean;
+    trigger?: {
+      applyWindow?: "after_hours" | "all";
+    };
     action?: {
       fallbackText?: string;
     };

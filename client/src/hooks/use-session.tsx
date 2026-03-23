@@ -45,6 +45,11 @@ type SessionContextValue = {
     workspaceName: string;
     timeZone?: string;
   }) => Promise<void>;
+  acceptInvite: (payload: {
+    token: string;
+    password: string;
+    name?: string;
+  }) => Promise<void>;
   setActiveWorkspaceId: (workspaceId: string) => void;
   logout: () => Promise<void>;
 };
@@ -143,6 +148,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession(nextSession);
   };
 
+  const acceptInvite = async (payload: {
+    token: string;
+    password: string;
+    name?: string;
+  }) => {
+    const nextSession = await apiRequest<SessionData>("/api/auth/invitations/accept", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setApiAuthContext({
+      token: nextSession.token,
+      workspaceId: nextSession.activeWorkspaceId,
+    });
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
+    setSession(nextSession);
+  };
+
   const setActiveWorkspaceId = (workspaceId: string) => {
     setSession((current) => {
       if (!current) {
@@ -208,6 +230,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         deployment,
         login,
         register,
+        acceptInvite,
         setActiveWorkspaceId,
         logout,
       }}

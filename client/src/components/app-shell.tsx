@@ -7,15 +7,28 @@ import {
   type MessageReceivedRealtimePayload,
 } from "../utils/inbound-notification";
 
-const navItems = [
-  { to: "/inbox", label: "Inbox", adminOnly: false },
-  { to: "/channels", label: "Channels", adminOnly: true },
-  { to: "/knowledge", label: "Knowledge", adminOnly: false },
-  { to: "/canned-replies", label: "Canned Replies", adminOnly: true },
-  { to: "/automations", label: "Automations", adminOnly: true },
-  { to: "/ai-settings", label: "Admin Settings", adminOnly: true },
-  { to: "/workspace-members", label: "Workspace Members", adminOnly: true },
-  { to: "/analytics", label: "Analytics", adminOnly: false },
+const navSections = [
+  {
+    title: "Workspace",
+    items: [
+      { to: "/inbox", label: "Inbox", adminOnly: false },
+      { to: "/channels", label: "Channels", adminOnly: true },
+      { to: "/analytics", label: "Analytics", adminOnly: false },
+    ],
+  },
+  {
+    title: "Settings",
+    items: [
+      { to: "/knowledge", label: "Knowledge", adminOnly: false },
+      { to: "/canned-replies", label: "Canned Replies", adminOnly: true },
+      { to: "/business-hours", label: "Business Hours", adminOnly: true },
+      { to: "/workspace-members", label: "Workspace Members", adminOnly: true },
+    ],
+  },
+  {
+    title: "AI Settings",
+    items: [{ to: "/ai-settings", label: "AI Settings", adminOnly: true }],
+  },
 ] as const;
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -180,28 +193,46 @@ export function AppShell() {
               ) : null}
             </div>
 
-            <nav className="space-y-1">
-              {navItems
-                .filter((item) => !item.adminOnly || isAdmin)
-                .map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === "/inbox"}
-                    title={item.label}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition",
-                        isSidebarCollapsed && "justify-center px-2",
-                        isActive
-                          ? "bg-white text-slate-950 shadow-sm"
-                          : "text-slate-300 hover:bg-slate-900 hover:text-white"
-                      )
-                    }
-                  >
-                    {isSidebarCollapsed ? item.label.slice(0, 1) : item.label}
-                  </NavLink>
-                ))}
+            <nav className="space-y-4">
+              {navSections.map((section) => {
+                const visibleItems = section.items.filter(
+                  (item) => !item.adminOnly || isAdmin
+                );
+
+                if (!visibleItems.length) {
+                  return null;
+                }
+
+                return (
+                  <div key={section.title} className="space-y-1">
+                    {!isSidebarCollapsed ? (
+                      <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        {section.title}
+                      </p>
+                    ) : null}
+
+                    {visibleItems.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.to === "/inbox"}
+                        title={item.label}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                            isSidebarCollapsed && "justify-center px-2",
+                            isActive
+                              ? "bg-white text-slate-950 shadow-sm"
+                              : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                          )
+                        }
+                      >
+                        {isSidebarCollapsed ? item.label.slice(0, 1) : item.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                );
+              })}
             </nav>
           </div>
 

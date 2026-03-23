@@ -64,6 +64,9 @@ router.patch(
                 type: "after_hours_auto_reply",
                 name: payload.afterHoursRule.name,
                 isActive: payload.afterHoursRule.isActive,
+                trigger: {
+                  applyWindow: "after_hours",
+                },
                 action: {
                   fallbackText: payload.afterHoursRule.fallbackText,
                 },

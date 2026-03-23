@@ -27,11 +27,18 @@ const channelMeta: Record<
 
 export function ChannelBadge({ channel }: { channel: Channel }) {
   const meta = channelMeta[channel];
+  const iconSrc = `/platform-icons/${channel}.svg`;
 
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize ring-1 ${meta.className}`}
     >
+      <img
+        src={iconSrc}
+        alt=""
+        aria-hidden="true"
+        className="mr-1 h-3.5 w-3.5 object-contain"
+      />
       {meta.label}
     </span>
   );

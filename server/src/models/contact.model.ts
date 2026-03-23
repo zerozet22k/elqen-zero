@@ -29,7 +29,9 @@ const contactSchema = new Schema(
     },
     primaryName: { type: String, default: "Unknown contact" },
     phones: { type: [String], default: [] },
+    deliveryAddress: { type: String, default: "" },
     notes: { type: String, default: "" },
+    aiNotes: { type: String, default: "" },
   },
   {
     collection: "contacts",

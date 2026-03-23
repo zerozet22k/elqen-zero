@@ -6,6 +6,9 @@ type MemberItem = {
   _id: string;
   role: "owner" | "admin" | "staff";
   status: "active" | "invited" | "disabled";
+  inviteExpiresAt?: string | null;
+  inviteEmailSentAt?: string | null;
+  inviteAcceptedAt?: string | null;
   user: {
     _id: string;
     email: string;
@@ -24,6 +27,7 @@ export function WorkspaceMembersPage() {
   const [name, setName] = useState("");
   const [role, setRole] = useState<"admin" | "staff">("staff");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const loadMembers = useCallback(async () => {
     if (!workspaceId) {
@@ -56,8 +60,16 @@ export function WorkspaceMembersPage() {
 
     setSubmitting(true);
     setError(null);
+    setNotice(null);
     try {
-      await apiRequest(`/api/workspaces/${workspaceId}/members`, {
+      const response = await apiRequest<{
+        inviteDelivery?: {
+          inviteUrl?: string;
+          emailSent?: boolean;
+          emailSkipped?: boolean;
+          emailReason?: string | null;
+        } | null;
+      }>(`/api/workspaces/${workspaceId}/members`, {
         method: "POST",
         body: JSON.stringify({
           email: email.trim(),
@@ -68,9 +80,55 @@ export function WorkspaceMembersPage() {
       setEmail("");
       setName("");
       setRole("staff");
+      if (response.inviteDelivery?.inviteUrl) {
+        setNotice(
+          response.inviteDelivery.emailSent
+            ? `Invitation email sent. Invite link: ${response.inviteDelivery.inviteUrl}`
+            : `Invitation created. Copy this link to share manually: ${response.inviteDelivery.inviteUrl}`
+        );
+      } else {
+        setNotice("Member added.");
+      }
       await loadMembers();
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to add member");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResendInvite = async (memberId: string) => {
+    if (!workspaceId) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await apiRequest<{
+        inviteDelivery?: {
+          inviteUrl?: string;
+          emailSent?: boolean;
+          emailSkipped?: boolean;
+          emailReason?: string | null;
+        } | null;
+      }>(`/api/workspaces/${workspaceId}/members/${memberId}/resend-invite`, {
+        method: "POST",
+      });
+
+      if (response.inviteDelivery?.inviteUrl) {
+        setNotice(
+          response.inviteDelivery.emailSent
+            ? `Invitation email sent again. Invite link: ${response.inviteDelivery.inviteUrl}`
+            : `New invite link created: ${response.inviteDelivery.inviteUrl}`
+        );
+      } else {
+        setNotice("Invite refreshed.");
+      }
+      await loadMembers();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to resend invite");
     } finally {
       setSubmitting(false);
     }
@@ -96,6 +154,12 @@ export function WorkspaceMembersPage() {
       {error ? (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
           {error}
+        </div>
+      ) : null}
+
+      {notice ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          {notice}
         </div>
       ) : null}
 
@@ -137,18 +201,19 @@ export function WorkspaceMembersPage() {
               <th className="px-4 py-3 font-medium">Email</th>
               <th className="px-4 py-3 font-medium">Role</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-slate-500">
+                <td colSpan={5} className="px-4 py-6 text-slate-500">
                   Loading members...
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-slate-500">
+                <td colSpan={5} className="px-4 py-6 text-slate-500">
                   No members found.
                 </td>
               </tr>
@@ -159,6 +224,20 @@ export function WorkspaceMembersPage() {
                   <td className="px-4 py-3">{item.user?.email ?? "N/A"}</td>
                   <td className="px-4 py-3 capitalize">{item.role}</td>
                   <td className="px-4 py-3 capitalize">{item.status}</td>
+                  <td className="px-4 py-3">
+                    {item.status === "invited" ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleResendInvite(item._id)}
+                        disabled={submitting}
+                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Resend invite
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-400">No action</span>
+                    )}
+                  </td>
                 </tr>
               ))
             )}

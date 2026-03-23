@@ -10,6 +10,14 @@ import {
 import { CanonicalMessage } from "../channels/types";
 
 class ContactService {
+  private normalizePhone(value: string) {
+    return value.replace(/\s+/g, " ").trim();
+  }
+
+  private normalizePhoneList(values: string[]) {
+    return [...new Set(values.map((value) => this.normalizePhone(value)).filter(Boolean))];
+  }
+
   async upsertFromMessage(
     workspaceId: string,
     message: CanonicalMessage
@@ -58,7 +66,7 @@ class ContactService {
         existing.primaryName = displayName;
       }
       if (phone && !existing.phones.includes(phone)) {
-        existing.phones.push(phone);
+        existing.phones = this.normalizePhoneList([...existing.phones, phone]);
       }
       await existing.save();
       return existing;
@@ -75,12 +83,72 @@ class ContactService {
         },
       ],
       primaryName: displayName,
-      phones: phone ? [phone] : [],
+      phones: phone ? this.normalizePhoneList([phone]) : [],
     });
   }
 
   async getById(id: string) {
     return ContactModel.findById(id);
+  }
+
+  async updateById(params: {
+    workspaceId: string;
+    contactId: string;
+    patch: {
+      phones?: string[];
+      deliveryAddress?: string;
+      notes?: string;
+      aiNotes?: string;
+    };
+    mergePhones?: boolean;
+  }) {
+    const contact = await ContactModel.findOne({
+      _id: params.contactId,
+      workspaceId: params.workspaceId,
+    });
+
+    if (!contact) {
+      return null;
+    }
+
+    if (params.patch.phones) {
+      const nextPhones = this.normalizePhoneList(params.patch.phones);
+      contact.phones = params.mergePhones
+        ? this.normalizePhoneList([...contact.phones, ...nextPhones])
+        : nextPhones;
+    }
+
+    if (typeof params.patch.deliveryAddress === "string") {
+      contact.deliveryAddress = params.patch.deliveryAddress.trim();
+    }
+
+    if (typeof params.patch.notes === "string") {
+      contact.notes = params.patch.notes.trim();
+    }
+
+    if (typeof params.patch.aiNotes === "string") {
+      contact.aiNotes = params.patch.aiNotes.trim();
+    }
+
+    await contact.save();
+    return contact;
+  }
+
+  async applyAIProfileUpdate(params: {
+    workspaceId: string;
+    contactId: string;
+    update: {
+      phones?: string[];
+      deliveryAddress?: string;
+      aiNotes?: string;
+    };
+  }) {
+    return this.updateById({
+      workspaceId: params.workspaceId,
+      contactId: params.contactId,
+      patch: params.update,
+      mergePhones: true,
+    });
   }
 
   async deleteWithHistory(params: { workspaceId: string; contactId: string }) {

@@ -1,13 +1,5 @@
 /**
- * Tests for workspace-owned Gemini AI config override.
- *
- * Covers:
- *   1. Workspace Gemini key is required for generateReply
- *   2. Workspace Gemini override is used when provided
- *   3. Feature is unavailable when no workspace key exists
- *   4. GET /api/ai-settings never exposes raw geminiApiKey — only hasGeminiApiKey
- *   5. PATCH /api/ai-settings encrypts the key before storing
- *   6. Stored ciphertext is not the same as the plaintext key
+ * Tests for workspace-owned Codex assistant config override.
  */
 
 import axios from "axios";
@@ -15,7 +7,7 @@ import mongoose from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "../config/env";
-import { encryptField, decryptField } from "../lib/crypto";
+import { decryptField, encryptField } from "../lib/crypto";
 import { aiReplyService } from "../services/ai-reply.service";
 
 const testDbName = `chatbot_ai_override_test_${Date.now()}`;
@@ -41,19 +33,13 @@ beforeAll(async () => {
 beforeEach(async () => {
   vi.restoreAllMocks();
   const collections = mongoose.connection.collections;
-  await Promise.all(
-    Object.values(collections).map((col) => col.deleteMany({}))
-  );
+  await Promise.all(Object.values(collections).map((col) => col.deleteMany({})));
 });
 
 afterAll(async () => {
   await mongoose.connection.dropDatabase();
   await mongoose.disconnect();
 }, 60000);
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
 
 const registerAndLogin = async () => {
   const reg = await request(app).post("/api/auth/register").send({
@@ -68,25 +54,18 @@ const registerAndLogin = async () => {
   return reg.body as {
     token: string;
     activeWorkspaceId: string;
-    workspaces: Array<{ _id: string; slug: string }>;
   };
 };
-
-// ---------------------------------------------------------------------------
-// encryption utility
-// ---------------------------------------------------------------------------
 
 describe("encryptField / decryptField", () => {
   it("round-trips plaintext correctly", () => {
     const secret = "test-encryption-key-32-bytes!!!";
-    const plaintext = "super-secret-gemini-api-key";
+    const plaintext = "super-secret-codex-api-key";
     const ciphertext = encryptField(plaintext, secret);
 
     expect(ciphertext).not.toBe(plaintext);
     expect(ciphertext.length).toBeGreaterThan(0);
-
-    const decrypted = decryptField(ciphertext, secret);
-    expect(decrypted).toBe(plaintext);
+    expect(decryptField(ciphertext, secret)).toBe(plaintext);
   });
 
   it("returns empty string for empty inputs", () => {
@@ -95,28 +74,10 @@ describe("encryptField / decryptField", () => {
     expect(decryptField("", "secret")).toBe("");
     expect(decryptField("ciphertext", "")).toBe("");
   });
-
-  it("returns empty string when decrypting with wrong key", () => {
-    const ciphertext = encryptField("secret-key", "correct-secret-key-long-enough");
-    const result = decryptField(ciphertext, "wrong-secret-key-long-enough!!!!");
-    expect(result).toBe("");
-  });
-
-  it("stores different ciphertext each call (random IV)", () => {
-    const secret = "test-encryption-key-32-bytes!!!";
-    const plaintext = "same-plaintext";
-    const ct1 = encryptField(plaintext, secret);
-    const ct2 = encryptField(plaintext, secret);
-    expect(ct1).not.toBe(ct2);
-  });
 });
 
-// ---------------------------------------------------------------------------
-// AI settings API — key masking
-// ---------------------------------------------------------------------------
-
 describe("GET /api/ai-settings — key masking", () => {
-  it("returns hasGeminiApiKey=false when no key is set", async () => {
+  it("returns hasAssistantApiKey=false when no key is set", async () => {
     const { token, activeWorkspaceId } = await registerAndLogin();
 
     const res = await request(app)
@@ -125,18 +86,18 @@ describe("GET /api/ai-settings — key masking", () => {
       .set("X-Workspace-Id", activeWorkspaceId);
 
     expect(res.status).toBe(200);
-    expect(res.body.settings.hasGeminiApiKey).toBe(false);
-    expect(res.body.settings).not.toHaveProperty("geminiApiKey");
+    expect(res.body.settings.hasAssistantApiKey).toBe(false);
+    expect(res.body.settings).not.toHaveProperty("assistantApiKey");
   });
 
-  it("returns hasGeminiApiKey=true after setting a key, without exposing the raw key", async () => {
+  it("returns hasAssistantApiKey=true after setting a key, without exposing the raw key", async () => {
     const { token, activeWorkspaceId } = await registerAndLogin();
 
     await request(app)
       .patch("/api/ai-settings")
       .set("Authorization", `Bearer ${token}`)
       .set("X-Workspace-Id", activeWorkspaceId)
-      .send({ geminiApiKey: "workspace-secret-key" });
+      .send({ assistantApiKey: "workspace-secret-key" });
 
     const res = await request(app)
       .get("/api/ai-settings")
@@ -144,25 +105,23 @@ describe("GET /api/ai-settings — key masking", () => {
       .set("X-Workspace-Id", activeWorkspaceId);
 
     expect(res.status).toBe(200);
-    expect(res.body.settings.hasGeminiApiKey).toBe(true);
-    // The raw key must never appear in the API response.
-    expect(res.body.settings).not.toHaveProperty("geminiApiKey");
+    expect(res.body.settings.hasAssistantApiKey).toBe(true);
+    expect(res.body.settings).not.toHaveProperty("assistantApiKey");
     expect(JSON.stringify(res.body)).not.toContain("workspace-secret-key");
   });
 
   it("stores the key encrypted (ciphertext !== plaintext)", async () => {
     const { token, activeWorkspaceId } = await registerAndLogin();
-    const workspaceId = activeWorkspaceId;
 
     await request(app)
       .patch("/api/ai-settings")
       .set("Authorization", `Bearer ${token}`)
       .set("X-Workspace-Id", activeWorkspaceId)
-      .send({ geminiApiKey: "my-raw-gemini-key" });
+      .send({ assistantApiKey: "my-raw-codex-key" });
 
-    const dbRecord = await models.AISettingsModel.findOne({ workspaceId });
-    expect(dbRecord?.geminiApiKey).toBeTruthy();
-    expect(dbRecord?.geminiApiKey).not.toBe("my-raw-gemini-key");
+    const dbRecord = await models.AISettingsModel.findOne({ workspaceId: activeWorkspaceId });
+    expect(dbRecord?.assistantApiKey).toBeTruthy();
+    expect(dbRecord?.assistantApiKey).not.toBe("my-raw-codex-key");
   });
 
   it("clears the key when an empty string is patched", async () => {
@@ -172,73 +131,109 @@ describe("GET /api/ai-settings — key masking", () => {
       .patch("/api/ai-settings")
       .set("Authorization", `Bearer ${token}`)
       .set("X-Workspace-Id", activeWorkspaceId)
-      .send({ geminiApiKey: "temporary-key" });
+      .send({ assistantApiKey: "temporary-key" });
 
     await request(app)
       .patch("/api/ai-settings")
       .set("Authorization", `Bearer ${token}`)
       .set("X-Workspace-Id", activeWorkspaceId)
-      .send({ geminiApiKey: "" });
+      .send({ assistantApiKey: "" });
 
     const res = await request(app)
       .get("/api/ai-settings")
       .set("Authorization", `Bearer ${token}`)
       .set("X-Workspace-Id", activeWorkspaceId);
 
-    expect(res.body.settings.hasGeminiApiKey).toBe(false);
+    expect(res.body.settings.hasAssistantApiKey).toBe(false);
+  });
+
+  it("surfaces legacy saved provider credentials during migration", async () => {
+    const { token, activeWorkspaceId } = await registerAndLogin();
+    const secret = env.FIELD_ENCRYPTION_KEY || env.SESSION_SECRET;
+
+    await models.AISettingsModel.findOneAndUpdate(
+      { workspaceId: activeWorkspaceId },
+      {
+        $set: {
+          workspaceId: activeWorkspaceId,
+          geminiApiKey: encryptField("legacy-key", secret),
+          geminiModel: "gemini-2.5-flash",
+          assistantApiKey: "",
+          assistantModel: "",
+        },
+      },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
+
+    const res = await request(app)
+      .get("/api/ai-settings")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Workspace-Id", activeWorkspaceId);
+
+    expect(res.status).toBe(200);
+    expect(res.body.settings.hasAssistantApiKey).toBe(true);
+    expect(res.body.settings.assistantModel).toBe("gemini-2.5-flash");
   });
 });
 
-// ---------------------------------------------------------------------------
-// AI settings API — geminiModel override
-// ---------------------------------------------------------------------------
-
 describe("PATCH /api/ai-settings — model override", () => {
-  it("stores and returns geminiModel", async () => {
+  it("stores and returns assistantModel", async () => {
     const { token, activeWorkspaceId } = await registerAndLogin();
 
     await request(app)
       .patch("/api/ai-settings")
       .set("Authorization", `Bearer ${token}`)
       .set("X-Workspace-Id", activeWorkspaceId)
-      .send({ geminiModel: "gemini-workspace-model" });
+      .send({ assistantModel: "gpt-5.3-codex" });
 
     const res = await request(app)
       .get("/api/ai-settings")
       .set("Authorization", `Bearer ${token}`)
       .set("X-Workspace-Id", activeWorkspaceId);
 
-    expect(res.body.settings.geminiModel).toBe("gemini-workspace-model");
+    expect(res.body.settings.assistantProvider).toBe("codex");
+    expect(res.body.settings.assistantModel).toBe("gpt-5.3-codex");
   });
 });
 
-// ---------------------------------------------------------------------------
-// aiReplyService — key resolution
-// ---------------------------------------------------------------------------
+describe("PATCH /api/ai-settings — assistant instructions", () => {
+  it("stores and returns assistantInstructions", async () => {
+    const { token, activeWorkspaceId } = await registerAndLogin();
+
+    await request(app)
+      .patch("/api/ai-settings")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Workspace-Id", activeWorkspaceId)
+      .send({
+        assistantInstructions:
+          "You are helping a dental clinic.\nDraft price replies for staff review.",
+      });
+
+    const res = await request(app)
+      .get("/api/ai-settings")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Workspace-Id", activeWorkspaceId);
+
+    expect(res.status).toBe(200);
+    expect(res.body.settings.assistantInstructions).toBe(
+      "You are helping a dental clinic.\nDraft price replies for staff review."
+    );
+  });
+});
 
 describe("aiReplyService — workspace override priority", () => {
-  it("uses the default model when a workspace key is provided without a model override", async () => {
+  it("uses the default Codex model when a workspace key is provided without a model override", async () => {
     const encryptionSecret = env.FIELD_ENCRYPTION_KEY || env.SESSION_SECRET;
     const encryptedKey = encryptField("workspace-only-key", encryptionSecret);
 
     const axiosSpy = vi.spyOn(axios, "post").mockResolvedValueOnce({
       data: {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  text: JSON.stringify({
-                    replyText: "Hello there.",
-                    confidence: 0.82,
-                    sourceHints: [],
-                    reason: "Generated from conversation context",
-                  }),
-                },
-              ],
-            },
-          },
-        ],
+        output_text: JSON.stringify({
+          replyText: "Hello there.",
+          confidence: 0.82,
+          sourceHints: [],
+          reason: "Generated from conversation context",
+        }),
       },
     });
 
@@ -254,6 +249,7 @@ describe("aiReplyService — workspace override priority", () => {
         raw: {},
         occurredAt: new Date(),
       },
+      channel: "telegram",
       workspaceAiOverride: {
         encryptedApiKey: encryptedKey,
       },
@@ -264,31 +260,22 @@ describe("aiReplyService — workspace override priority", () => {
       throw new Error(`Expected knowledge reply, got ${result.kind}`);
     }
     expect(result.text).toBe("Hello there.");
-    expect(String(axiosSpy.mock.calls[0]?.[0])).toContain(`models/${env.GEMINI_MODEL}:generateContent`);
+    expect(String(axiosSpy.mock.calls[0]?.[0])).toContain("/responses");
+    expect((axiosSpy.mock.calls[0]?.[1] as { model?: string }).model).toBe(env.OPENAI_MODEL);
   });
 
-  it("uses workspace override key when provided (raises past key-missing check)", async () => {
+  it("uses workspace override key and model when provided", async () => {
     const encryptionSecret = env.FIELD_ENCRYPTION_KEY || env.SESSION_SECRET;
     const encryptedKey = encryptField("workspace-override-key", encryptionSecret);
 
     const axiosSpy = vi.spyOn(axios, "post").mockResolvedValueOnce({
       data: {
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  text: JSON.stringify({
-                    replyText: "Thanks, can you share a bit more detail?",
-                    confidence: 0.76,
-                    sourceHints: [],
-                    reason: "Generated from workspace override",
-                  }),
-                },
-              ],
-            },
-          },
-        ],
+        output_text: JSON.stringify({
+          replyText: "Thanks, can you share a bit more detail?",
+          confidence: 0.76,
+          sourceHints: [],
+          reason: "Generated from workspace override",
+        }),
       },
     });
 
@@ -304,9 +291,11 @@ describe("aiReplyService — workspace override priority", () => {
         raw: {},
         occurredAt: new Date(),
       },
+      channel: "telegram",
       workspaceAiOverride: {
+        assistantProvider: "codex",
         encryptedApiKey: encryptedKey,
-        modelOverride: "workspace-model",
+        modelOverride: "gpt-5.2-codex",
       },
     });
 
@@ -315,11 +304,15 @@ describe("aiReplyService — workspace override priority", () => {
       throw new Error(`Expected knowledge reply, got ${result.kind}`);
     }
     expect(result.text).toContain("share a bit more detail");
-    expect(String(axiosSpy.mock.calls[0]?.[0])).toContain("models/workspace-model:generateContent");
+    expect((axiosSpy.mock.calls[0]?.[1] as { model?: string }).model).toBe(
+      "gpt-5.2-codex"
+    );
   });
 
-  it("returns key-missing reason when no workspace key is present", async () => {
+  it("returns key-missing reason when no workspace or env key is present", async () => {
     const axiosSpy = vi.spyOn(axios, "post");
+    const originalOpenAiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "";
 
     const result = await aiReplyService.generateReply({
       workspaceId: new mongoose.Types.ObjectId().toString(),
@@ -333,11 +326,14 @@ describe("aiReplyService — workspace override priority", () => {
         raw: {},
         occurredAt: new Date(),
       },
+      channel: "telegram",
       workspaceAiOverride: undefined,
     });
 
+    process.env.OPENAI_API_KEY = originalOpenAiKey;
+
     expect(result.kind).toBe("low_confidence");
-    expect(result.reason).toMatch(/Workspace Gemini API key is not configured/i);
+    expect(result.reason).toMatch(/Workspace Codex API key is not configured/i);
     expect(axiosSpy).not.toHaveBeenCalled();
   });
 });

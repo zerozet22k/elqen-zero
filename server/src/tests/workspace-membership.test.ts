@@ -92,6 +92,33 @@ describe("workspace memberships", () => {
     expect(response.body.membership.role).toBe("staff");
   });
 
+  it("returns an invite link for newly invited users", async () => {
+    const workspace = await models.WorkspaceModel.create({
+      name: "Workspace",
+      slug: "members-invite-link",
+      timeZone: "UTC",
+    });
+
+    const headers = await createAuthHeaders({
+      workspaceId: String(workspace._id),
+      role: "admin",
+      email: "admin@test.local",
+    });
+
+    const response = await request(app)
+      .post(`/api/workspaces/${workspace._id}/members`)
+      .set(headers)
+      .send({
+        email: "invitee@test.local",
+        name: "Invitee",
+        role: "staff",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.membership.status).toBe("invited");
+    expect(response.body.inviteDelivery.inviteUrl).toContain("/accept-invite?token=");
+  });
+
   it("owner can promote staff/admin", async () => {
     const workspace = await models.WorkspaceModel.create({
       name: "Workspace",
@@ -146,5 +173,58 @@ describe("workspace memberships", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.message).toContain("last active owner");
+  });
+
+  it("invited users can accept an invite and activate their membership", async () => {
+    const workspace = await models.WorkspaceModel.create({
+      name: "Workspace",
+      slug: "members-accept-invite",
+      timeZone: "UTC",
+    });
+
+    const ownerHeaders = await createAuthHeaders({
+      workspaceId: String(workspace._id),
+      role: "owner",
+      email: "owner@test.local",
+    });
+
+    const inviteResponse = await request(app)
+      .post(`/api/workspaces/${workspace._id}/members`)
+      .set(ownerHeaders)
+      .send({
+        email: "invitee@test.local",
+        name: "Invited User",
+        role: "admin",
+      });
+
+    const inviteUrl = String(inviteResponse.body.inviteDelivery.inviteUrl);
+    const token = new URL(inviteUrl).searchParams.get("token");
+    expect(token).toBeTruthy();
+
+    const acceptResponse = await request(app)
+      .post("/api/auth/invitations/accept")
+      .send({
+        token,
+        name: "Invited User",
+        password: "SecretPass123",
+      });
+
+    expect(acceptResponse.status).toBe(200);
+    expect(acceptResponse.body.token).toBeTruthy();
+    expect(
+      acceptResponse.body.workspaces.some(
+        (item: { _id: string; status: string }) =>
+          item._id === String(workspace._id) && item.status === "active"
+      )
+    ).toBe(true);
+
+    const acceptedUser = await models.UserModel.findOne({ email: "invitee@test.local" });
+    const membership = await models.WorkspaceMembershipModel.findOne({
+      workspaceId: workspace._id,
+      userId: acceptedUser?._id,
+      status: "active",
+    });
+    expect(membership?.inviteAcceptedAt).toBeTruthy();
+    expect(membership?.inviteTokenHash).toBeNull();
   });
 });

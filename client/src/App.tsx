@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/app-shell";
 import { useSession } from "./hooks/use-session";
 import { AISettingsPage } from "./pages/AISettingsPage";
+import { AcceptInvitePage } from "./pages/AcceptInvitePage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AutomationsPage } from "./pages/AutomationsPage";
 import { CannedRepliesPage } from "./pages/CannedRepliesPage";
@@ -29,12 +30,14 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/channels" element={<ChannelsPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />
         <Route path="/canned-replies" element={<CannedRepliesPage />} />
-        <Route path="/automations" element={<AutomationsPage />} />
+        <Route path="/business-hours" element={<AutomationsPage />} />
+        <Route path="/automations" element={<Navigate to="/business-hours" replace />} />
         <Route path="/ai-settings" element={<AISettingsPage />} />
         <Route path="/workspace-members" element={<WorkspaceMembersPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />

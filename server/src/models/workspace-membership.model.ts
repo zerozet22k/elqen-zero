@@ -36,6 +36,22 @@ const workspaceMembershipSchema = new Schema(
       ref: "User",
       default: null,
     },
+    inviteTokenHash: {
+      type: String,
+      default: null,
+    },
+    inviteExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    inviteEmailSentAt: {
+      type: Date,
+      default: null,
+    },
+    inviteAcceptedAt: {
+      type: Date,
+      default: null,
+    },
     lastActiveAt: {
       type: Date,
       default: null,

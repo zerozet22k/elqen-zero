@@ -14,26 +14,29 @@ import {
 const router = Router();
 router.use(requireWorkspace);
 
-/** Return the effective encryption secret (FIELD_ENCRYPTION_KEY falls back to SESSION_SECRET). */
 const encryptionSecret = () => env.FIELD_ENCRYPTION_KEY || env.SESSION_SECRET;
 
-/** Serialize AI settings for the client — never expose the raw geminiApiKey. */
 const serializeSettings = (settings: InstanceType<typeof AISettingsModel> | null) => {
   if (!settings) return null;
+  const storedGeminiModel = settings.geminiModel || settings.assistantModel || "";
+  const storedGeminiApiKey = settings.geminiApiKey || settings.assistantApiKey || "";
+  const autoReplyMode =
+    settings.autoReplyMode || (settings.autoReplyEnabled ? "all" : "none");
   return {
     workspaceId: String(settings.workspaceId),
     enabled: settings.enabled,
     autoReplyEnabled: settings.autoReplyEnabled,
+    autoReplyMode,
     afterHoursEnabled: settings.afterHoursEnabled,
     confidenceThreshold: settings.confidenceThreshold,
     fallbackMessage: settings.fallbackMessage,
-    geminiModel: settings.geminiModel || "",
+    assistantInstructions: settings.assistantInstructions || "",
+    geminiModel: storedGeminiModel,
     supportedChannels: {
       ...DEFAULT_SUPPORTED_CHANNELS,
       ...(settings.supportedChannels ?? {}),
     },
-    // Expose only whether a workspace key is set, never the key itself.
-    hasGeminiApiKey: !!(settings.geminiApiKey),
+    hasGeminiApiKey: !!storedGeminiApiKey,
   };
 };
 
@@ -55,22 +58,31 @@ router.patch(
       workspaceId: String(req.workspace?._id ?? ""),
     });
 
-    // Build $set payload — encrypt geminiApiKey before storing.
     const updateFields: Record<string, unknown> = {
       workspaceId: payload.workspaceId,
     };
 
     if (payload.enabled !== undefined) updateFields.enabled = payload.enabled;
-    if (payload.autoReplyEnabled !== undefined) updateFields.autoReplyEnabled = payload.autoReplyEnabled;
+    if (payload.autoReplyMode !== undefined) {
+      updateFields.autoReplyMode = payload.autoReplyMode;
+      updateFields.autoReplyEnabled = payload.autoReplyMode !== "none";
+    } else if (payload.autoReplyEnabled !== undefined) {
+      updateFields.autoReplyEnabled = payload.autoReplyEnabled;
+      updateFields.autoReplyMode = payload.autoReplyEnabled ? "all" : "none";
+    }
     if (payload.afterHoursEnabled !== undefined) updateFields.afterHoursEnabled = payload.afterHoursEnabled;
     if (payload.confidenceThreshold !== undefined) updateFields.confidenceThreshold = payload.confidenceThreshold;
     if (payload.fallbackMessage !== undefined) updateFields.fallbackMessage = payload.fallbackMessage;
-    if (payload.geminiModel !== undefined) updateFields.geminiModel = payload.geminiModel;
+    if (payload.assistantInstructions !== undefined) updateFields.assistantInstructions = payload.assistantInstructions;
+    if (payload.geminiModel !== undefined) {
+      updateFields.geminiModel = payload.geminiModel;
+      updateFields.assistantModel = "";
+    }
     if (payload.geminiApiKey !== undefined) {
-      // Empty string clears the override; a non-empty value is encrypted at rest.
       updateFields.geminiApiKey = payload.geminiApiKey
         ? encryptField(payload.geminiApiKey, encryptionSecret())
         : "";
+      updateFields.assistantApiKey = "";
     }
     if (payload.supportedChannels !== undefined) {
       const currentSupportedChannels =

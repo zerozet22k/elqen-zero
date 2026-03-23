@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Message } from "../../types/models";
 import { resolveRenderableMedia } from "./thread-media-utils";
 
@@ -82,14 +82,37 @@ function getAttachmentLinkLabel(message: Message) {
   }
 }
 
+function isAiReviewSystemMessage(message: Message) {
+  if (message.kind !== "system" && message.senderType !== "system") {
+    return false;
+  }
+
+  const internalNoteType = (message.meta as Record<string, unknown> | undefined)?.internalNoteType;
+  if (internalNoteType === "ai_review") {
+    return true;
+  }
+
+  const body = message.text?.body ?? "";
+  return (
+    body.startsWith("AI draft ready for human review") ||
+    body.startsWith("Draft reply ready for human review") ||
+    body.startsWith("Human follow-up requested")
+  );
+}
+
 function renderMessageContent(
   message: Message,
   isOutbound: boolean,
   isSystem: boolean,
+  isAiReviewNote: boolean,
   onMediaLoad?: () => void
 ) {
   const textClass =
-    isOutbound && !isSystem ? "text-slate-100" : "text-slate-800";
+    isOutbound && !isSystem
+      ? "text-slate-100"
+      : isAiReviewNote
+        ? "text-slate-700"
+        : "text-slate-800";
   const mediaState = resolveRenderableMedia(message);
   const attachmentUrl = mediaState.preferredUrl;
   const mediaCount = message.media?.length ?? 0;
@@ -358,9 +381,23 @@ function renderMessageContent(
   }
 }
 
-export function ThreadView({ messages }: { messages: Message[] }) {
+type ThreadViewProps = {
+  messages: Message[];
+  replyingByLabel?: string | null;
+};
+
+export function ThreadView({ messages, replyingByLabel = null }: ThreadViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [dismissedMessageIds, setDismissedMessageIds] = useState<Set<string>>(new Set());
+
+  const dismissMessage = useCallback((messageId: string) => {
+    setDismissedMessageIds((current) => {
+      const next = new Set(current);
+      next.add(messageId);
+      return next;
+    });
+  }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const container = containerRef.current;
@@ -396,10 +433,34 @@ export function ThreadView({ messages }: { messages: Message[] }) {
       className="flex h-full min-h-0 flex-col overflow-y-auto pr-2"
     >
       <div className="mt-auto space-y-2">
+        <div className="flex justify-center py-1">
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-medium text-slate-500">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              className="h-3.5 w-3.5"
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v6" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 6.5 3.5-3.5 3.5 3.5" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 14h14" />
+            </svg>
+            <span>Start of conversation</span>
+          </div>
+        </div>
+
         {messages.map((message) => {
+          if (dismissedMessageIds.has(message._id)) {
+            return null;
+          }
+
           const isOutbound = message.direction === "outbound";
           const isSystem =
             message.kind === "system" || message.senderType === "system";
+          const isAiReviewNote = isAiReviewSystemMessage(message);
           const isSticker = isTelegramStickerLike(message);
           const hasDeliveryError =
             message.delivery?.error || message.meta?.deliveryError;
@@ -416,7 +477,9 @@ export function ThreadView({ messages }: { messages: Message[] }) {
           const bubbleClass = isSticker
             ? ""
             : isSystem
-              ? "max-w-[80%] rounded-xl bg-slate-50 px-3 py-1.5"
+              ? isAiReviewNote
+                ? "relative max-w-[85%] rounded-2xl border border-slate-300 bg-slate-100/85 px-4 py-3 pr-10"
+                : "max-w-[80%] rounded-xl bg-slate-50 px-3 py-1.5"
               : isOutbound
                 ? "max-w-[72%] rounded-2xl rounded-br-sm bg-slate-800 px-3.5 py-2.5 text-white"
                 : "max-w-[72%] rounded-2xl rounded-bl-sm bg-slate-100 px-3.5 py-2.5";
@@ -424,10 +487,23 @@ export function ThreadView({ messages }: { messages: Message[] }) {
           return (
             <article key={message._id} className={wrapperClass}>
               <div className={bubbleClass}>
+                {isAiReviewNote ? (
+                  <button
+                    type="button"
+                    aria-label="Close AI review note"
+                    title="Close"
+                    onClick={() => dismissMessage(message._id)}
+                    className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white/70 text-slate-500 transition hover:bg-white hover:text-slate-700"
+                  >
+                    <span aria-hidden="true" className="text-sm leading-none">&times;</span>
+                  </button>
+                ) : null}
+
                 {renderMessageContent(
                   message,
                   isOutbound,
                   isSystem,
+                  isAiReviewNote,
                   () => scrollToBottom("auto")
                 )}
 
@@ -482,6 +558,19 @@ export function ThreadView({ messages }: { messages: Message[] }) {
             </article>
           );
         })}
+
+        {replyingByLabel ? (
+          <div className="flex justify-end">
+            <div className="inline-flex items-center gap-2 rounded-full bg-slate-800 px-3 py-1 text-[11px] font-medium text-slate-100 ring-1 ring-slate-700">
+              <span className="inline-flex items-center gap-1" aria-hidden="true">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-100" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-100 [animation-delay:120ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-100 [animation-delay:240ms]" />
+              </span>
+              <span>Replying: {replyingByLabel}</span>
+            </div>
+          </div>
+        ) : null}
 
         <div ref={bottomRef} className="h-px w-full shrink-0" />
       </div>

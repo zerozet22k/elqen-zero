@@ -83,6 +83,48 @@ class MessageService {
     });
   }
 
+  async createInternalSystemMessage(params: {
+    workspaceId: string;
+    conversationId: string;
+    channel: CanonicalMessage["channel"];
+    channelAccountId: string;
+    externalChatId: string;
+    text: string;
+    meta?: Record<string, unknown>;
+    occurredAt?: Date;
+  }) {
+    const occurredAt = params.occurredAt ?? new Date();
+
+    return MessageModel.create({
+      workspaceId: params.workspaceId,
+      conversationId: params.conversationId,
+      channel: params.channel,
+      channelAccountId: params.channelAccountId,
+      externalMessageId: null,
+      externalChatId: params.externalChatId,
+      externalSenderId: null,
+      direction: "outbound",
+      senderType: "system",
+      kind: "system",
+      text: {
+        body: params.text,
+        plain: params.text,
+      },
+      media: [],
+      status: "sent",
+      raw: {
+        internal: true,
+        createdAt: occurredAt.toISOString(),
+      },
+      meta: {
+        internal: true,
+        ...(params.meta ?? {}),
+      },
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    });
+  }
+
   async finalizeOutboundMessage(
     messageId: string,
     sendResult: SendOutboundResult
@@ -177,24 +219,31 @@ class MessageService {
     limit = 12
   ): Promise<Array<{
     senderType: string;
+    direction?: string;
     kind: string;
     text?: { body?: string };
     media?: Array<{ url?: string; filename?: string }>;
+    meta?: Record<string, unknown>;
     createdAt: Date;
   }>> {
     const messages = await MessageModel.find({ conversationId })
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select("senderType kind text media createdAt")
+      .select("senderType direction kind text media meta createdAt")
       .lean();
 
     return messages
       .reverse()
       .map((message) => ({
         senderType: message.senderType,
+        direction: message.direction,
         kind: message.kind,
         text: message.text as { body?: string } | undefined,
         media: (message.media as Array<{ url?: string; filename?: string }> | undefined) ?? [],
+        meta:
+          typeof message.meta === "object" && message.meta !== null
+            ? (message.meta as Record<string, unknown>)
+            : undefined,
         createdAt: message.createdAt,
       }));
   }

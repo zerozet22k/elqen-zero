@@ -138,6 +138,42 @@ function Field({
   );
 }
 
+function ChannelSupportToggleRow(props: {
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-900">{props.label}</p>
+        <p className="mt-1 text-sm text-slate-500">{props.description}</p>
+      </div>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={props.checked}
+        onClick={() => props.onChange(!props.checked)}
+        disabled={props.disabled}
+        className={[
+          "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60",
+          props.checked ? "bg-slate-900" : "bg-slate-300",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition",
+            props.checked ? "translate-x-6" : "translate-x-1",
+          ].join(" ")}
+        />
+      </button>
+    </div>
+  );
+}
+
 function ProviderFields({
   channel,
   form,
@@ -550,6 +586,7 @@ export function ChannelsPage() {
   const [facebookOAuthBusy, setFacebookOAuthBusy] = useState(false);
   const [facebookOAuthPages, setFacebookOAuthPages] = useState<FacebookOAuthPage[]>([]);
   const [selectedFacebookPageId, setSelectedFacebookPageId] = useState("");
+  const [isUpdatingChannelSupport, setIsUpdatingChannelSupport] = useState(false);
 
   const loadConnections = useCallback(async () => {
     if (!workspaceId) return;
@@ -970,6 +1007,42 @@ export function ChannelsPage() {
     }
   };
 
+  const handleSupportedChannelChange = async (targetChannel: Channel, value: boolean) => {
+    if (!workspaceId) {
+      return;
+    }
+
+    const previousValue = supportedChannels[targetChannel];
+    setSupportedChannels((current) => ({
+      ...current,
+      [targetChannel]: value,
+    }));
+
+    try {
+      setIsUpdatingChannelSupport(true);
+      setError(null);
+      await apiRequest<{ settings: AISettings | null }>("/api/ai-settings", {
+        method: "PATCH",
+        body: JSON.stringify({
+          workspaceId,
+          supportedChannels: {
+            [targetChannel]: value,
+          },
+        }),
+      });
+    } catch (err) {
+      setSupportedChannels((current) => ({
+        ...current,
+        [targetChannel]: previousValue,
+      }));
+      setError(
+        err instanceof Error ? err.message : "Failed to update channel availability."
+      );
+    } finally {
+      setIsUpdatingChannelSupport(false);
+    }
+  };
+
   const selectedConnection =
     connections.find((item) => item.channel === channel) ?? null;
   const selectedConnectionId =
@@ -1054,6 +1127,31 @@ export function ChannelsPage() {
         </div>
       ) : null}
 
+      <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">Channel availability</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Enable or disable channels for new connections and outbound sends in this workspace.
+            Existing conversations remain visible for reference.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {channelOptions.map((option) => (
+            <ChannelSupportToggleRow
+              key={option}
+              label={channelMeta[option].label}
+              description={`Allow ${channelMeta[option].label} connections and outbound replies in this workspace.`}
+              checked={supportedChannels[option]}
+              disabled={isUpdatingChannelSupport}
+              onChange={(value) => {
+                void handleSupportedChannelChange(option, value);
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.05fr)]">
         <section className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div>
@@ -1064,7 +1162,7 @@ export function ChannelsPage() {
 
           {!selectedChannelSupported ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              {channelMeta[channel].label} is currently disabled in Admin Settings. Enable it there before testing or saving a connection.
+              {channelMeta[channel].label} is currently disabled for this workspace. Enable it in Channel availability before testing or saving a connection.
             </div>
           ) : null}
 

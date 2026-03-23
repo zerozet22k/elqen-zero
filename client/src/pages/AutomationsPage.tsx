@@ -4,7 +4,6 @@ import { apiRequest } from "../services/api";
 import { AutomationState, BusinessHoursDay } from "../types/models";
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-const DEFAULT_FALLBACK_TEXT = "Thanks for your message. We will reply soon.";
 
 const defaultSchedule = (): BusinessHoursDay[] =>
   weekdayLabels.map((_, dayOfWeek) => ({
@@ -13,40 +12,29 @@ const defaultSchedule = (): BusinessHoursDay[] =>
     windows: [{ start: "09:00", end: "18:00" }],
   }));
 
-type ToggleRowProps = {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-};
+function normalizeWeeklySchedule(input?: BusinessHoursDay[]): BusinessHoursDay[] {
+  const base = defaultSchedule();
+  if (!input?.length) {
+    return base;
+  }
 
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-900">{label}</p>
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
-      </div>
+  const mapped = new Map(input.map((day) => [day.dayOfWeek, day]));
 
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={[
-          "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition",
-          checked ? "bg-slate-900" : "bg-slate-300",
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition",
-            checked ? "translate-x-6" : "translate-x-1",
-          ].join(" ")}
-        />
-      </button>
-    </div>
-  );
+  return base.map((defaultDay) => {
+    const existing = mapped.get(defaultDay.dayOfWeek);
+    if (!existing) {
+      return defaultDay;
+    }
+
+    return {
+      dayOfWeek: defaultDay.dayOfWeek,
+      enabled: existing.enabled,
+      windows:
+        existing.windows?.length
+          ? existing.windows
+          : [{ start: "09:00", end: "18:00" }],
+    };
+  });
 }
 
 type DayScheduleRowProps = {
@@ -137,9 +125,6 @@ export function AutomationsPage() {
 
   const [timeZone, setTimeZone] = useState("UTC");
   const [schedule, setSchedule] = useState<BusinessHoursDay[]>(defaultSchedule());
-  const [ruleName, setRuleName] = useState("After Hours");
-  const [fallbackText, setFallbackText] = useState(DEFAULT_FALLBACK_TEXT);
-  const [isActive, setIsActive] = useState(true);
 
   const [isBooting, setIsBooting] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -156,26 +141,10 @@ export function AutomationsPage() {
 
     if (response.businessHours) {
       setTimeZone(response.businessHours.timeZone || "UTC");
-      setSchedule(
-        response.businessHours.weeklySchedule?.length
-          ? response.businessHours.weeklySchedule
-          : defaultSchedule()
-      );
+      setSchedule(normalizeWeeklySchedule(response.businessHours.weeklySchedule));
     } else {
       setTimeZone("UTC");
       setSchedule(defaultSchedule());
-    }
-
-    if (response.afterHoursRule) {
-      setRuleName(response.afterHoursRule.name || "After Hours");
-      setIsActive(Boolean(response.afterHoursRule.isActive));
-      setFallbackText(
-        response.afterHoursRule.action?.fallbackText ?? DEFAULT_FALLBACK_TEXT
-      );
-    } else {
-      setRuleName("After Hours");
-      setIsActive(true);
-      setFallbackText(DEFAULT_FALLBACK_TEXT);
     }
   }, [workspaceId]);
 
@@ -257,11 +226,6 @@ export function AutomationsPage() {
             timeZone,
             weeklySchedule: schedule,
           },
-          afterHoursRule: {
-            name: ruleName,
-            isActive,
-            fallbackText,
-          },
         }),
       });
 
@@ -316,27 +280,19 @@ export function AutomationsPage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Automation
+              Business Hours
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-              Business hours and after-hours reply policy
+              Business hours policy
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-500">
-              Define your staff&rsquo;s weekly working hours and configure the
-              automated reply sent to customers who contact you outside those
-              hours.
+              Define your staff&rsquo;s weekly working hours for after-hours detection.
+              Reply mode and fallback text are managed in AI Settings.
             </p>
           </div>
 
-          <span
-            className={[
-              "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1",
-              isActive
-                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                : "bg-slate-100 text-slate-600 ring-slate-200",
-            ].join(" ")}
-          >
-            {isActive ? "After-hours reply on" : "After-hours reply off"}
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+            Fallback rule in AI Settings
           </span>
         </div>
       </header>
@@ -353,15 +309,14 @@ export function AutomationsPage() {
       >
         <div>
           <h3 className="text-base font-semibold text-slate-900">
-            Rule configuration
+            Business hours configuration
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Configure the automated reply sent to customers when your team is
-            offline. This only fires when using the AI auto-reply feature.
+            Configure your workspace time zone and weekly staff schedule.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-1">
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-slate-900">
               Time zone
@@ -373,46 +328,6 @@ export function AutomationsPage() {
               className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             />
           </label>
-
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-slate-900">
-              Rule name
-            </span>
-            <input
-              value={ruleName}
-              onChange={(event) => setRuleName(event.target.value)}
-              placeholder="After Hours"
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-            />
-          </label>
-        </div>
-
-        <ToggleRow
-          label="After-hours reply enabled"
-          description="When enabled, customers who message outside your staff working hours automatically receive the fallback reply below."
-          checked={isActive}
-          onChange={setIsActive}
-        />
-
-        <div>
-          <label
-            htmlFor="automation-fallback-text"
-            className="text-sm font-medium text-slate-900"
-          >
-            Fallback text
-          </label>
-          <p className="mt-1 text-sm text-slate-500">
-            Sent when a message arrives outside your configured business hours.
-          </p>
-
-          <textarea
-            id="automation-fallback-text"
-            rows={5}
-            value={fallbackText}
-            onChange={(event) => setFallbackText(event.target.value)}
-            className="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-            placeholder={DEFAULT_FALLBACK_TEXT}
-          />
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -450,7 +365,7 @@ export function AutomationsPage() {
             type="submit"
             disabled={isSaving}
           >
-            {isSaving ? "Saving..." : "Save automation"}
+              {isSaving ? "Saving..." : "Save business hours"}
           </button>
         </div>
       </form>

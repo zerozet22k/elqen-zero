@@ -782,7 +782,7 @@ describe("functional messaging core", () => {
     );
     const failedMessage = await models.MessageModel.findOne({ direction: "outbound" });
 
-    expect(refreshedConnection?.status).toBe("error");
+    expect(refreshedConnection?.status).toBe("active");
     expect(refreshedConnection?.lastError).toContain("Telegram send_message failed");
     expect(failedMessage?.status).toBe("failed");
   });
@@ -948,7 +948,7 @@ describe("functional messaging core", () => {
     expect(conversation?.tags).toContain("needs_human");
     expect(messages).toHaveLength(1);
     expect(messages[0].senderType).toBe("customer");
-    expect(handoffAudit?.reason).toContain("Workspace Gemini API key is not configured");
+    expect(handoffAudit?.reason).toContain("Workspace Codex API key is not configured");
   });
 
   it("buffers quick inbound text messages and flushes as one combined AI input", async () => {

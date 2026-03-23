@@ -19,6 +19,7 @@ import {
 import { env } from "../../config/env";
 import { authenticate } from "../../middleware/authenticate";
 import { DEFAULT_SUPPORTED_CHANNELS } from "../../services/channel-support.service";
+import { workspaceInviteService } from "../../services/workspace-invite.service";
 
 const router = Router();
 
@@ -34,6 +35,16 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+});
+
+const acceptInviteSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+  name: z.string().min(1).optional(),
+});
+
+const inviteTokenParamSchema = z.object({
+  token: z.string().min(1),
 });
 
 const buildDefaultBusinessHours = () => [
@@ -208,6 +219,12 @@ router.post(
       throw new UnauthorizedError("Invalid email or password");
     }
 
+    if (user.passwordHash === "!invited-account") {
+      throw new UnauthorizedError(
+        "This invited account has not been activated yet. Use the invitation link to set your password."
+      );
+    }
+
     const passwordMatches = await bcrypt.compare(
       payload.password,
       user.passwordHash
@@ -269,6 +286,137 @@ router.post(
       },
       workspaces: workspaceItems,
       activeWorkspaceId: workspaceItems[0]._id,
+    });
+  })
+);
+
+router.get(
+  "/invitations/:token",
+  asyncHandler(async (req, res) => {
+    const { token } = inviteTokenParamSchema.parse(req.params);
+    const inviteTokenHash = workspaceInviteService.hashInviteToken(token);
+
+    const membership = await WorkspaceMembershipModel.findOne({
+      inviteTokenHash,
+      status: "invited",
+    });
+    if (!membership || !membership.inviteExpiresAt || membership.inviteExpiresAt < new Date()) {
+      throw new ValidationError("This invitation link is invalid or has expired");
+    }
+
+    const [workspace, user] = await Promise.all([
+      WorkspaceModel.findById(membership.workspaceId),
+      UserModel.findById(membership.userId),
+    ]);
+    if (!workspace || !user) {
+      throw new ValidationError("This invitation is no longer available");
+    }
+
+    res.json({
+      invitation: {
+        workspace: {
+          _id: String(workspace._id),
+          name: workspace.name,
+          slug: workspace.slug,
+        },
+        role: membership.role,
+        email: user.email,
+        name: user.name,
+        expiresAt: membership.inviteExpiresAt,
+      },
+    });
+  })
+);
+
+router.post(
+  "/invitations/accept",
+  asyncHandler(async (req, res) => {
+    const payload = acceptInviteSchema.parse(req.body);
+    const inviteTokenHash = workspaceInviteService.hashInviteToken(payload.token);
+
+    const membership = await WorkspaceMembershipModel.findOne({
+      inviteTokenHash,
+      status: "invited",
+    });
+    if (!membership || !membership.inviteExpiresAt || membership.inviteExpiresAt < new Date()) {
+      throw new ValidationError("This invitation link is invalid or has expired");
+    }
+
+    const [workspace, user] = await Promise.all([
+      WorkspaceModel.findById(membership.workspaceId),
+      UserModel.findById(membership.userId),
+    ]);
+    if (!workspace || !user) {
+      throw new ValidationError("This invitation is no longer available");
+    }
+
+    user.passwordHash = await bcrypt.hash(payload.password, 10);
+    if (payload.name?.trim()) {
+      user.name = payload.name.trim();
+    }
+    if (!user.workspaceIds.some((id) => String(id) === String(workspace._id))) {
+      user.workspaceIds.push(workspace._id);
+    }
+
+    membership.status = "active";
+    membership.inviteAcceptedAt = new Date();
+    membership.inviteTokenHash = null;
+    membership.inviteExpiresAt = null;
+    membership.lastActiveAt = new Date();
+
+    await Promise.all([user.save(), membership.save()]);
+
+    const memberships = await WorkspaceMembershipModel.find({
+      userId: user._id,
+      status: { $in: ["active", "invited"] },
+    });
+    const workspaceIds = memberships.map((nextMembership) => nextMembership.workspaceId);
+    const workspaces = workspaceIds.length
+      ? await WorkspaceModel.find({ _id: { $in: workspaceIds } })
+      : [];
+    const workspaceMap = new Map(
+      workspaces.map((nextWorkspace) => [String(nextWorkspace._id), nextWorkspace])
+    );
+
+    const workspaceItems = memberships
+      .map((nextMembership) => {
+        const nextWorkspace = workspaceMap.get(String(nextMembership.workspaceId));
+        if (!nextWorkspace) {
+          return null;
+        }
+        return {
+          _id: String(nextWorkspace._id),
+          name: nextWorkspace.name,
+          slug: nextWorkspace.slug,
+          timeZone: nextWorkspace.timeZone,
+          role: nextMembership.role,
+          status: nextMembership.status,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => !!item);
+
+    const token = jwt.sign(
+      {
+        userId: String(user._id),
+        email: user.email,
+      },
+      env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      token,
+      user: {
+        _id: String(user._id),
+        email: user.email,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+      },
+      workspaces: workspaceItems,
+      activeWorkspaceId:
+        workspaceItems.find((item) => item._id === String(workspace._id))?._id ??
+        workspaceItems[0]?._id ??
+        String(workspace._id),
     });
   })
 );

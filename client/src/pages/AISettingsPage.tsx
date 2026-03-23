@@ -1,16 +1,10 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "../hooks/use-session";
 import { apiRequest } from "../services/api";
-import { AISettings, AuditLog, Channel } from "../types/models";
+import { AISettings, AuditLog } from "../types/models";
 import geminiModelOptionsData from "../utils/gemini-model-options.json";
 
 const geminiModelOptions = geminiModelOptionsData.models;
-const channelLabels: Record<Channel, string> = {
-  facebook: "Messenger",
-  telegram: "Telegram",
-  viber: "Viber",
-  tiktok: "TikTok",
-};
 
 type ToggleRowProps = {
   label: string;
@@ -71,6 +65,15 @@ export function AISettingsPage() {
     : settings?.hasGeminiApiKey
     ? "Workspace key saved"
     : "No workspace key saved";
+  const visibleLogs = useMemo(() => {
+    const filtered = logs.filter(
+      (log) =>
+        !log.eventType.startsWith("automation.buffer.") &&
+        log.eventType !== "webhook.received"
+    );
+
+    return filtered.length ? filtered : logs;
+  }, [logs]);
 
   const loadSettings = useCallback(async () => {
     if (!workspaceId) return;
@@ -86,10 +89,12 @@ export function AISettingsPage() {
         workspaceId,
         enabled: true,
         autoReplyEnabled: true,
+        autoReplyMode: "all",
         afterHoursEnabled: true,
         confidenceThreshold: 0.7,
         fallbackMessage:
           "Thanks for your message. A teammate will follow up soon.",
+        assistantInstructions: "",
         geminiModel: "",
         hasGeminiApiKey: false,
         supportedChannels: {
@@ -159,10 +164,12 @@ export function AISettingsPage() {
 
       const payload: Record<string, unknown> = {
         enabled: settings.enabled,
-        autoReplyEnabled: settings.autoReplyEnabled,
+        autoReplyEnabled: settings.autoReplyMode !== "none",
+        autoReplyMode: settings.autoReplyMode,
         afterHoursEnabled: settings.afterHoursEnabled,
         confidenceThreshold: settings.confidenceThreshold,
         fallbackMessage: settings.fallbackMessage,
+        assistantInstructions: settings.assistantInstructions,
         geminiModel: settings.geminiModel.trim(),
         supportedChannels: settings.supportedChannels,
       };
@@ -173,10 +180,23 @@ export function AISettingsPage() {
         payload.geminiApiKey = "";
       }
 
-      const response = await apiRequest<{ settings: AISettings }>("/api/ai-settings", {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      });
+      const [response] = await Promise.all([
+        apiRequest<{ settings: AISettings }>("/api/ai-settings", {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        }),
+        apiRequest("/api/automations", {
+          method: "PATCH",
+          body: JSON.stringify({
+            workspaceId,
+            afterHoursRule: {
+              name: "After Hours",
+              isActive: settings.afterHoursEnabled,
+              mode: "after_hours",
+            },
+          }),
+        }),
+      ]);
 
       setSettings(response.settings);
       if (clearGeminiApiKey) {
@@ -247,7 +267,7 @@ export function AISettingsPage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Admin Settings
+              AI Settings
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
               Workspace automation and channel controls
@@ -300,9 +320,9 @@ export function AISettingsPage() {
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">Gemini provider</h4>
+                <h4 className="text-sm font-semibold text-slate-900">Gemini assistant</h4>
                 <p className="mt-1 text-sm text-slate-500">
-                  Manage the workspace Gemini stack from the UI instead of editing JSON or env by hand.
+                  Manage the workspace Gemini runtime from the UI instead of editing env files by hand.
                 </p>
               </div>
 
@@ -322,7 +342,7 @@ export function AISettingsPage() {
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-slate-900">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-900">
                   Gemini API key
                 </span>
                 <input
@@ -335,7 +355,11 @@ export function AISettingsPage() {
                       setClearGeminiApiKey(false);
                     }
                   }}
-                  placeholder={settings.hasGeminiApiKey ? "Leave blank to keep current key" : "Enter workspace Gemini API key"}
+                  placeholder={
+                    settings.hasGeminiApiKey
+                      ? "Leave blank to keep current key"
+                      : "Enter workspace Gemini API key"
+                  }
                   className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
                 />
                 <p className="mt-1.5 text-xs text-slate-500">
@@ -373,7 +397,10 @@ export function AISettingsPage() {
                 </p>
                 {settings.geminiModel ? (
                   <p className="mt-1.5 text-xs text-slate-600">
-                    Selected: {geminiModelOptions.find((model) => model.value === settings.geminiModel)?.description ?? settings.geminiModel}
+                    Selected:{" "}
+                    {geminiModelOptions.find(
+                      (model) => model.value === settings.geminiModel
+                    )?.description ?? settings.geminiModel}
                   </p>
                 ) : null}
               </label>
@@ -405,40 +432,6 @@ export function AISettingsPage() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-slate-900">Channel support</h4>
-                <p className="mt-1 text-sm text-slate-500">
-                  Disable a channel here to block new connections and outbound sends for that workspace.
-                  Existing conversations remain visible for reference.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {(Object.keys(channelLabels) as Channel[]).map((channel) => (
-                  <ToggleRow
-                    key={channel}
-                    label={channelLabels[channel]}
-                    description={`Allow ${channelLabels[channel]} connections and outbound replies in this workspace.`}
-                    checked={settings.supportedChannels[channel]}
-                    onChange={(value) =>
-                      setSettings((current) =>
-                        current
-                          ? {
-                              ...current,
-                              supportedChannels: {
-                                ...current.supportedChannels,
-                                [channel]: value,
-                              },
-                            }
-                          : current
-                      )
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-
             <ToggleRow
               label="AI enabled"
               description="Master switch for all AI behavior in this workspace."
@@ -448,20 +441,37 @@ export function AISettingsPage() {
               }
             />
 
-            <ToggleRow
-              label="Auto reply enabled"
-              description="Allow AI to send replies automatically when rules permit."
-              checked={settings.autoReplyEnabled}
-              onChange={(value) =>
-                setSettings((current) =>
-                  current ? { ...current, autoReplyEnabled: value } : current
-                )
-              }
-            />
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-900">Auto reply mode</h4>
+              <p className="mt-1 text-sm text-slate-500">
+                Control when the bot can auto-reply.
+              </p>
+
+              <select
+                value={settings.autoReplyMode}
+                onChange={(event) =>
+                  setSettings((current) =>
+                    current
+                      ? {
+                          ...current,
+                          autoReplyMode: event.target.value as AISettings["autoReplyMode"],
+                          autoReplyEnabled: event.target.value !== "none",
+                        }
+                      : current
+                  )
+                }
+                className="mt-3 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+              >
+                <option value="all">All</option>
+                <option value="after_hours_only">After-hours only</option>
+                <option value="business_hours_only">Not after-hours</option>
+                <option value="none">None</option>
+              </select>
+            </div>
 
             <ToggleRow
-              label="After-hours enabled"
-              description="Let the system respond automatically outside business hours."
+              label="Fallback replies enabled"
+              description="When AI cannot complete a reply, send fallback text outside business hours only."
               checked={settings.afterHoursEnabled}
               onChange={(value) =>
                 setSettings((current) =>
@@ -537,10 +547,10 @@ export function AISettingsPage() {
               htmlFor="fallback-message"
               className="text-sm font-medium text-slate-900"
             >
-              Fallback message
+              Fallback message (single source)
             </label>
             <p className="mt-1 text-sm text-slate-500">
-              Sent when the AI should not answer directly.
+              Used for after-hours mode and when the AI should not answer directly.
             </p>
 
             <textarea
@@ -597,12 +607,12 @@ export function AISettingsPage() {
           </div>
 
           <div className="mt-6 space-y-3">
-            {logs.length === 0 ? (
+            {visibleLogs.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
                 No audit activity yet.
               </div>
             ) : (
-              logs.map((log) => (
+              visibleLogs.map((log) => (
                 <article
                   className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
                   key={log._id}
@@ -627,6 +637,16 @@ export function AISettingsPage() {
                     <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
                       sources: {log.sourceHints.length ? log.sourceHints.join(", ") : "none"}
                     </span>
+                    {typeof log.data?.replyType === "string" ? (
+                      <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                        reply: {log.data.replyType}
+                      </span>
+                    ) : null}
+                    {log.data?.pendingAckSent === true ? (
+                      <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+                        customer acknowledged
+                      </span>
+                    ) : null}
                   </div>
                 </article>
               ))

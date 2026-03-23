@@ -61,19 +61,31 @@ export abstract class BaseChannelAdapter implements ChannelAdapter {
     request: unknown
   ): SendOutboundResult {
     if (axios.isAxiosError(error)) {
+      const providerDescription =
+        typeof error.response?.data === "object" &&
+        error.response?.data &&
+        "description" in error.response.data
+          ? String(error.response.data.description)
+          : undefined;
+      const providerError =
+        typeof error.response?.data === "object" &&
+        error.response?.data &&
+        "error" in error.response.data
+          ? String(error.response.data.error)
+          : undefined;
+
+      const normalizedTelegramIdError =
+        providerDescription &&
+        /wrong remote file identifier specified: wrong string length/i.test(
+          providerDescription
+        )
+          ? "Telegram rejected the file identifier length. Use a valid Telegram file_id (not file_unique_id) or a reachable public media URL."
+          : undefined;
+
       return {
         status: "failed",
         error:
-          (typeof error.response?.data === "object" &&
-          error.response?.data &&
-          "description" in error.response.data
-            ? String(error.response.data.description)
-            : undefined) ??
-          (typeof error.response?.data === "object" &&
-          error.response?.data &&
-          "error" in error.response.data
-            ? String(error.response.data.error)
-            : undefined) ??
+          normalizedTelegramIdError ?? providerDescription ?? providerError ??
           error.message,
         raw: error.response?.data ?? null,
         request,

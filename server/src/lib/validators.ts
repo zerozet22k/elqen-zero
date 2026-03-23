@@ -83,6 +83,12 @@ export const conversationQuerySchema = z.object({
   status: z.enum(CONVERSATION_STATUSES).optional(),
   channel: z.enum(CHANNELS).optional(),
   assigneeUserId: z.string().optional(),
+  needsHuman: z
+    .union([z.boolean(), z.string()])
+    .transform((value) =>
+      typeof value === "boolean" ? value : value.toLowerCase() === "true"
+    )
+    .optional(),
   search: z.string().optional(),
 });
 
@@ -205,6 +211,13 @@ export const updateConversationSchema = z.object({
   unreadCount: z.number().int().min(0).optional(),
 });
 
+export const updateContactSchema = z.object({
+  phones: z.array(z.string().min(1)).optional(),
+  deliveryAddress: z.string().optional(),
+  notes: z.string().optional(),
+  aiNotes: z.string().optional(),
+});
+
 export const createKnowledgeItemSchema = z.object({
   workspaceId: z.string().min(1),
   title: z.string().min(1),
@@ -248,11 +261,13 @@ export const updateAISettingsSchema = z.object({
   workspaceId: z.string().min(1),
   enabled: z.boolean().optional(),
   autoReplyEnabled: z.boolean().optional(),
+  autoReplyMode: z
+    .enum(["none", "all", "after_hours_only", "business_hours_only"])
+    .optional(),
   afterHoursEnabled: z.boolean().optional(),
   confidenceThreshold: z.number().min(0).max(1).optional(),
   fallbackMessage: z.string().optional(),
-  // Workspace-owned Gemini provider overrides.
-  // Pass an empty string to clear an override.
+  assistantInstructions: z.string().optional(),
   geminiApiKey: z.string().optional(),
   geminiModel: z.string().optional(),
   supportedChannels: z
@@ -287,6 +302,7 @@ export const updateAutomationsSchema = z.object({
   afterHoursRule: z
     .object({
       isActive: z.boolean(),
+      mode: z.enum(["off", "after_hours", "all"]).optional(),
       name: z.string().min(1),
       fallbackText: z.string().optional(),
     })

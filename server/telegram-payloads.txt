@@ -1387,3 +1387,887 @@
     "text": "Hello"
   }
 }
+
+===== 2026-03-23T03:47:54.439Z =====
+{
+  "update_id": 237740497,
+  "message": {
+    "message_id": 646,
+    "from": {
+      "id": 8702803300,
+      "is_bot": false,
+      "first_name": "MOJIBULKARIM",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 8702803300,
+      "first_name": "MOJIBULKARIM",
+      "type": "private"
+    },
+    "date": 1774168802,
+    "text": "/start",
+    "entities": [
+      {
+        "offset": 0,
+        "length": 6,
+        "type": "bot_command"
+      }
+    ]
+  }
+}
+
+===== 2026-03-23T03:51:49.889Z =====
+{
+  "update_id": 237740498,
+  "message": {
+    "message_id": 648,
+    "from": {
+      "id": 1881941080,
+      "is_bot": false,
+      "first_name": "Noble Educare",
+      "last_name": "Centre",
+      "username": "NobleEducareCentre",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1881941080,
+      "first_name": "Noble Educare",
+      "last_name": "Centre",
+      "username": "NobleEducareCentre",
+      "type": "private"
+    },
+    "date": 1774237910,
+    "text": "စတစ်ကဘယ်လောက်လဲ"
+  }
+}
+
+===== 2026-03-23T03:55:11.101Z =====
+{
+  "update_id": 237740499,
+  "message": {
+    "message_id": 650,
+    "from": {
+      "id": 1881941080,
+      "is_bot": false,
+      "first_name": "Noble Educare",
+      "last_name": "Centre",
+      "username": "NobleEducareCentre",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1881941080,
+      "first_name": "Noble Educare",
+      "last_name": "Centre",
+      "username": "NobleEducareCentre",
+      "type": "private"
+    },
+    "date": 1774238111,
+    "text": "စတစ်ကဘယ်လောက်လဲ"
+  }
+}
+
+===== 2026-03-23T03:57:47.227Z =====
+{
+  "update_id": 237740500,
+  "message": {
+    "message_id": 652,
+    "from": {
+      "id": 1881941080,
+      "is_bot": false,
+      "first_name": "Noble Educare",
+      "last_name": "Centre",
+      "username": "NobleEducareCentre",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1881941080,
+      "first_name": "Noble Educare",
+      "last_name": "Centre",
+      "username": "NobleEducareCentre",
+      "type": "private"
+    },
+    "date": 1774238267,
+    "text": "စတစ်က ဘယ်လောက်လဲ"
+  }
+}
+
+===== 2026-03-23T04:04:23.636Z =====
+{
+  "update_id": 1002,
+  "message": {
+    "message_id": 1002,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "Do you have blue?"
+  }
+}
+
+===== 2026-03-23T04:04:24.028Z =====
+{
+  "update_id": 2001,
+  "message": {
+    "message_id": 2001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "sticker": {
+      "file_id": "sticker-1"
+    }
+  }
+}
+
+===== 2026-03-23T04:04:25.414Z =====
+{
+  "update_id": 1001,
+  "message": {
+    "message_id": 1001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "Hello"
+  }
+}
+
+===== 2026-03-23T04:04:26.027Z =====
+{
+  "update_id": 1001,
+  "message": {
+    "message_id": 1001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "Hello"
+  }
+}
+
+===== 2026-03-23T04:04:26.205Z =====
+{
+  "update_id": 3001,
+  "message": {
+    "message_id": 3001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "Is this available?"
+  }
+}
+
+===== 2026-03-23T04:04:26.286Z =====
+{
+  "update_id": 3501,
+  "message": {
+    "message_id": 3501,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "Is this available today?"
+  }
+}
+
+===== 2026-03-23T04:04:26.337Z =====
+{
+  "update_id": 4001,
+  "message": {
+    "message_id": 4001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "Can you compare three fabrics and suggest one?"
+  }
+}
+
+===== 2026-03-23T04:04:26.574Z =====
+{
+  "update_id": 5001,
+  "message": {
+    "message_id": 5001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "Hello"
+  }
+}
+
+===== 2026-03-23T04:04:26.588Z =====
+{
+  "update_id": 5002,
+  "message": {
+    "message_id": 5002,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "I need combined"
+  }
+}
+
+===== 2026-03-23T04:04:26.634Z =====
+{
+  "update_id": 6001,
+  "message": {
+    "message_id": 6001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "part one"
+  }
+}
+
+===== 2026-03-23T04:04:26.652Z =====
+{
+  "update_id": 6002,
+  "message": {
+    "message_id": 6002,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "part two"
+  }
+}
+
+===== 2026-03-23T04:04:26.675Z =====
+{
+  "update_id": 7001,
+  "message": {
+    "message_id": 7001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "first text"
+  }
+}
+
+===== 2026-03-23T04:04:26.689Z =====
+{
+  "update_id": 7002,
+  "message": {
+    "message_id": 7002,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina"
+    },
+    "photo": [
+      {
+        "file_id": "photo1",
+        "width": 100,
+        "height": 100
+      }
+    ]
+  }
+}
+
+===== 2026-03-23T04:04:27.112Z =====
+{
+  "update_id": 1001,
+  "message": {
+    "message_id": 1001,
+    "date": 1772935200,
+    "chat": {
+      "id": 5001
+    },
+    "from": {
+      "id": 7001,
+      "first_name": "Mina",
+      "username": "mina_shop"
+    },
+    "text": "Hello"
+  }
+}
+
+===== 2026-03-23T04:08:41.753Z =====
+{
+  "update_id": 237740501,
+  "message": {
+    "message_id": 654,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774238921,
+    "text": "စတစ်က ဘယ်လောက်လဲ"
+  }
+}
+
+===== 2026-03-23T04:12:56.410Z =====
+{
+  "update_id": 237740502,
+  "message": {
+    "message_id": 656,
+    "from": {
+      "id": 1881941080,
+      "is_bot": false,
+      "first_name": "Noble Educare",
+      "last_name": "Centre",
+      "username": "NobleEducareCentre",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1881941080,
+      "first_name": "Noble Educare",
+      "last_name": "Centre",
+      "username": "NobleEducareCentre",
+      "type": "private"
+    },
+    "date": 1774239176,
+    "text": "Stick ကဘယ်လောက်လဲ"
+  }
+}
+
+===== 2026-03-23T05:09:07.434Z =====
+{
+  "update_id": 237740503,
+  "message": {
+    "message_id": 659,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774242547,
+    "text": "okay i want grade 6 sticks"
+  }
+}
+
+===== 2026-03-23T05:09:44.775Z =====
+{
+  "update_id": 237740504,
+  "message": {
+    "message_id": 662,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774242584,
+    "text": "I think all"
+  }
+}
+
+===== 2026-03-23T05:12:47.795Z =====
+{
+  "update_id": 237740505,
+  "message": {
+    "message_id": 665,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774242768,
+    "text": "sure"
+  }
+}
+
+===== 2026-03-23T05:34:44.054Z =====
+{
+  "update_id": 237740506,
+  "message": {
+    "message_id": 668,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774244084,
+    "text": "hi"
+  }
+}
+
+===== 2026-03-23T05:34:44.822Z =====
+{
+  "update_id": 237740506,
+  "message": {
+    "message_id": 668,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774244084,
+    "text": "hi"
+  }
+}
+
+===== 2026-03-23T05:34:47.188Z =====
+{
+  "update_id": 237740506,
+  "message": {
+    "message_id": 668,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774244084,
+    "text": "hi"
+  }
+}
+
+===== 2026-03-23T05:39:06.347Z =====
+{
+  "update_id": 237740506,
+  "message": {
+    "message_id": 668,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774244084,
+    "text": "hi"
+  }
+}
+
+===== 2026-03-23T05:39:06.929Z =====
+{
+  "update_id": 237740507,
+  "message": {
+    "message_id": 669,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774244336,
+    "text": "Ho"
+  }
+}
+
+===== 2026-03-23T05:39:35.421Z =====
+{
+  "update_id": 237740508,
+  "message": {
+    "message_id": 671,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774244375,
+    "text": "I want to buy all grade 9 sticks"
+  }
+}
+
+===== 2026-03-23T05:40:01.798Z =====
+{
+  "update_id": 237740509,
+  "message": {
+    "message_id": 673,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774244402,
+    "text": "Telegram please."
+  }
+}
+
+===== 2026-03-23T05:40:23.527Z =====
+{
+  "update_id": 237740510,
+  "message": {
+    "message_id": 675,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774244423,
+    "text": "what number"
+  }
+}
+
+===== 2026-03-23T08:36:30.047Z =====
+{
+  "update_id": 237740511,
+  "message": {
+    "message_id": 677,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774254990,
+    "text": "hello"
+  }
+}
+
+===== 2026-03-23T08:37:32.295Z =====
+{
+  "update_id": 237740512,
+  "message": {
+    "message_id": 679,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774255052,
+    "text": "ေပေးချေမှုအတွက် အသုံးပြုနိုင်တဲ့ ဖုန်းနံပါတ်များမှာ 09 987 475 416 နှင့် 09 979 816 922 တို ဖြစ်ပါတယ်ခင်ဗျာ။\n\nthis is wrong\n\n\nwhy didnt u take this prompt?\n\nငွေပေးချေမှု — KPay / Wave Pay / AYA Pay\nငွေပေးချေမှုအတွက် KPay, Wave Pay, AYA Pay တို့ဖြင့် ပေးချေလို့ရပါတယ်ခင်ဗျာ။\nငွေလွှဲရန် ဖုန်းနံပါတ်မှာ 09 979 816 922 ဖြစ်ပါတယ်ခင်ဗျာ။\n\nand only \n\nNEC ဆက်သွယ်ရန် အချက်အလက်\nNoble Educare Centre - NEC ၏ ဆက်သွယ်ရန် ဖုန်းနံပါတ်များမှာ 09 987 475 416 နှင့် 09 979 816 922 တို့ ဖြစ်ပါတယ်ခင်ဗျာ။\nလိပ်စာမှာ အမှတ် (39/G), ကိုယ့်မင်းကိုယ့်ချင်းလမ်း, ရွှေဂုံတိုင်, ဗဟန်းမြို့နယ်, Yangon ဖြစ်ပါတယ်ခင်ဗျာ။\n\ncan u tell me?\n\ncuz i need to know"
+  }
+}
+
+===== 2026-03-23T08:37:58.193Z =====
+{
+  "update_id": 237740513,
+  "message": {
+    "message_id": 681,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774255078,
+    "text": "i know cuz im the dev, lmao"
+  }
+}
+
+===== 2026-03-23T08:38:33.460Z =====
+{
+  "update_id": 237740514,
+  "message": {
+    "message_id": 683,
+    "from": {
+      "id": 1674774616,
+      "is_bot": false,
+      "first_name": "Zet",
+      "username": "zet229",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1674774616,
+      "first_name": "Zet",
+      "username": "zet229",
+      "type": "private"
+    },
+    "date": 1774255113,
+    "text": "tell me why ? why didn't u have that prompt?\n\ndidnt u have kb access to that?\n\nill ask again, \n\n\"what number\"?"
+  }
+}
+
+===== 2026-03-23T08:39:12.227Z =====
+{
+  "update_id": 237740515,
+  "message": {
+    "message_id": 685,
+    "from": {
+      "id": 1410298609,
+      "is_bot": false,
+      "first_name": "Eaindra",
+      "last_name": "Mon",
+      "username": "Eaindra25",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1410298609,
+      "first_name": "Eaindra",
+      "last_name": "Mon",
+      "username": "Eaindra25",
+      "type": "private"
+    },
+    "date": 1774255152,
+    "text": "hi , i wanna buy grade 9 courses"
+  }
+}
+
+===== 2026-03-23T08:39:48.686Z =====
+{
+  "update_id": 237740516,
+  "message": {
+    "message_id": 687,
+    "from": {
+      "id": 1410298609,
+      "is_bot": false,
+      "first_name": "Eaindra",
+      "last_name": "Mon",
+      "username": "Eaindra25",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1410298609,
+      "first_name": "Eaindra",
+      "last_name": "Mon",
+      "username": "Eaindra25",
+      "type": "private"
+    },
+    "date": 1774255189,
+    "text": "Telegram,i want all,  where do i send money? what number?"
+  }
+}
+
+===== 2026-03-23T08:40:18.102Z =====
+{
+  "update_id": 237740517,
+  "message": {
+    "message_id": 689,
+    "from": {
+      "id": 1410298609,
+      "is_bot": false,
+      "first_name": "Eaindra",
+      "last_name": "Mon",
+      "username": "Eaindra25",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1410298609,
+      "first_name": "Eaindra",
+      "last_name": "Mon",
+      "username": "Eaindra25",
+      "type": "private"
+    },
+    "date": 1774255218,
+    "photo": [
+      {
+        "file_id": "AgACAgUAAxkBAAICsWnA_HIHO8kDjsl6WacpXv-jQNmpAAICEGsbhXsJVl4fRL7h3rU2AQADAgADcwADOgQ",
+        "file_unique_id": "AQADAhBrG4V7CVZ4",
+        "file_size": 613,
+        "width": 90,
+        "height": 56
+      },
+      {
+        "file_id": "AgACAgUAAxkBAAICsWnA_HIHO8kDjsl6WacpXv-jQNmpAAICEGsbhXsJVl4fRL7h3rU2AQADAgADbQADOgQ",
+        "file_unique_id": "AQADAhBrG4V7CVZy",
+        "file_size": 6992,
+        "width": 320,
+        "height": 200
+      },
+      {
+        "file_id": "AgACAgUAAxkBAAICsWnA_HIHO8kDjsl6WacpXv-jQNmpAAICEGsbhXsJVl4fRL7h3rU2AQADAgADeAADOgQ",
+        "file_unique_id": "AQADAhBrG4V7CVZ9",
+        "file_size": 29519,
+        "width": 800,
+        "height": 500
+      },
+      {
+        "file_id": "AgACAgUAAxkBAAICsWnA_HIHO8kDjsl6WacpXv-jQNmpAAICEGsbhXsJVl4fRL7h3rU2AQADAgADeQADOgQ",
+        "file_unique_id": "AQADAhBrG4V7CVZ-",
+        "file_size": 48390,
+        "width": 1280,
+        "height": 800
+      }
+    ]
+  }
+}
+
+===== 2026-03-23T08:40:21.935Z =====
+{
+  "update_id": 237740518,
+  "message": {
+    "message_id": 691,
+    "from": {
+      "id": 1410298609,
+      "is_bot": false,
+      "first_name": "Eaindra",
+      "last_name": "Mon",
+      "username": "Eaindra25",
+      "language_code": "en"
+    },
+    "chat": {
+      "id": 1410298609,
+      "first_name": "Eaindra",
+      "last_name": "Mon",
+      "username": "Eaindra25",
+      "type": "private"
+    },
+    "date": 1774255222,
+    "text": "sent"
+  }
+}

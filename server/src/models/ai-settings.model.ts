@@ -10,16 +10,28 @@ const aiSettingsSchema = new Schema(
     },
     enabled: { type: Boolean, default: false },
     autoReplyEnabled: { type: Boolean, default: false },
+    autoReplyMode: {
+      type: String,
+      enum: ["none", "all", "after_hours_only", "business_hours_only"],
+      default: "none",
+    },
     afterHoursEnabled: { type: Boolean, default: false },
     confidenceThreshold: { type: Number, default: 0.7 },
     fallbackMessage: {
       type: String,
       default: "Thanks for your message. A teammate will follow up soon.",
     },
-    // Workspace-owned AI provider overrides (stored encrypted at rest).
-    // Use the AI settings API to set/remove; the raw value is never returned to clients.
+    assistantInstructions: {
+      type: String,
+      default: "",
+    },
     geminiApiKey: { type: String, default: "" },
     geminiModel: { type: String, default: "" },
+    // Legacy assistant override fields retained so partially migrated workspaces
+    // do not lose access if they already saved values during the failed swap.
+    assistantProvider: { type: String, default: "" },
+    assistantApiKey: { type: String, default: "" },
+    assistantModel: { type: String, default: "" },
     supportedChannels: {
       facebook: { type: Boolean, default: true },
       telegram: { type: Boolean, default: true },

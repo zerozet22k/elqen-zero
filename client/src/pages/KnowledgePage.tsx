@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "../hooks/use-session";
 import { apiRequest } from "../services/api";
-import { KnowledgeItem } from "../types/models";
+import { AISettings, KnowledgeItem } from "../types/models";
 
 type KnowledgeCardProps = {
   item: KnowledgeItem;
@@ -92,11 +92,15 @@ export function KnowledgePage() {
   const [content, setContent] = useState("");
   const [tags, setTags] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [assistantInstructions, setAssistantInstructions] = useState("");
 
   const [isBooting, setIsBooting] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingInstructions, setIsSavingInstructions] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [instructionsError, setInstructionsError] = useState<string | null>(null);
+  const [instructionsNotice, setInstructionsNotice] = useState<string | null>(null);
 
   const loadItems = useCallback(async () => {
     if (!workspaceId) return;
@@ -120,14 +124,14 @@ export function KnowledgePage() {
         setIsBooting(true);
         setError(null);
 
-        const response = await apiRequest<{ items: KnowledgeItem[] }>(
-          "/api/knowledge",
-          {},
-          { workspaceId }
-        );
+        const [response, settingsResponse] = await Promise.all([
+          apiRequest<{ items: KnowledgeItem[] }>("/api/knowledge", {}, { workspaceId }),
+          apiRequest<{ settings: AISettings | null }>("/api/ai-settings", {}, { workspaceId }),
+        ]);
 
         if (!cancelled) {
           setItems(response.items);
+          setAssistantInstructions(settingsResponse.settings?.assistantInstructions ?? "");
         }
       } catch (err) {
         if (!cancelled) {
@@ -262,6 +266,34 @@ export function KnowledgePage() {
     }
   };
 
+  const handleSaveInstructions = async () => {
+    if (!workspaceId) {
+      return;
+    }
+
+    try {
+      setIsSavingInstructions(true);
+      setInstructionsError(null);
+      setInstructionsNotice(null);
+
+      await apiRequest<{ settings: AISettings }>("/api/ai-settings", {
+        method: "PATCH",
+        body: JSON.stringify({
+          workspaceId,
+          assistantInstructions,
+        }),
+      });
+
+      setInstructionsNotice("AI instructions saved.");
+    } catch (err) {
+      setInstructionsError(
+        err instanceof Error ? err.message : "Failed to save AI instructions."
+      );
+    } finally {
+      setIsSavingInstructions(false);
+    }
+  };
+
   if (!workspaceId) {
     return (
       <div className="p-6">
@@ -277,7 +309,7 @@ export function KnowledgePage() {
       <div className="space-y-6 p-6">
         <div className="animate-pulse rounded-3xl border border-slate-200 bg-white p-6">
           <div className="h-4 w-32 rounded bg-slate-200" />
-          <div className="mt-3 h-8 w-[28rem] rounded bg-slate-200" />
+          <div className="mt-3 h-8 w-md rounded bg-slate-200" />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.1fr)]">
@@ -331,6 +363,55 @@ export function KnowledgePage() {
           {error}
         </div>
       ) : null}
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              AI Behavior
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-900">
+              Workspace AI instructions
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+              Describe your business, tone, approval rules, and what the AI should optimize for.
+              Keep factual answers in the knowledge library below.
+            </p>
+          </div>
+
+          <button
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+            type="button"
+            onClick={() => void handleSaveInstructions()}
+            disabled={isSavingInstructions}
+          >
+            {isSavingInstructions ? "Saving..." : "Save AI instructions"}
+          </button>
+        </div>
+
+        <textarea
+          id="assistant-instructions"
+          rows={8}
+          value={assistantInstructions}
+          onChange={(event) => setAssistantInstructions(event.target.value)}
+          className="mt-5 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+          placeholder={[
+            "Example:",
+            "You support a dental clinic in Yangon.",
+            "Use polite Burmese by default.",
+            "For prices and promotions, create a draft and ask staff to verify before sending.",
+            "For booking requests, ask for date, time, and phone number if missing.",
+          ].join("\n")}
+        />
+
+        {instructionsNotice ? (
+          <p className="mt-3 text-sm text-emerald-700">{instructionsNotice}</p>
+        ) : null}
+
+        {instructionsError ? (
+          <p className="mt-3 text-sm text-rose-700">{instructionsError}</p>
+        ) : null}
+      </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.1fr)]">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

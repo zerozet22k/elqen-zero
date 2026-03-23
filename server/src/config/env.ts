@@ -9,6 +9,7 @@ const envSchema = z.object({
   MONGO_URL: z.string().default("mongodb://localhost:27017"),
   MONGO_DB: z.string().default("botDb"),
   PUBLIC_WEBHOOK_BASE_URL: z.string().default(""),
+  GEMINI_API_KEY: z.string().default(""),
   GEMINI_MODEL: z.string().default("gemini-3.1-flash-lite-preview"),
   SOCKET_ORIGIN: z.string().default("http://localhost:3000"),
   JWT_SECRET: z.string().default("change-me"),
@@ -28,6 +29,16 @@ const envSchema = z.object({
   // Encryption key for workspace-owned sensitive fields
   // Falls back to SESSION_SECRET when not set.
   FIELD_ENCRYPTION_KEY: z.string().default(""),
+  SMTP_HOST: z.string().default(""),
+  SMTP_PORT: z.coerce.number().int().positive().default(465),
+  SMTP_SECURE: z
+    .string()
+    .transform((v) => v.toLowerCase() !== "false")
+    .default("true"),
+  SMTP_USER: z.string().default(""),
+  SMTP_PASS: z.string().default(""),
+  SMTP_FROM_EMAIL: z.string().default(""),
+  SMTP_FROM_NAME: z.string().default(""),
   META_APP_ID: z.string().default(""),
   META_APP_SECRET: z.string().default(""),
   META_WEBHOOK_VERIFY_TOKEN: z.string().default(""),

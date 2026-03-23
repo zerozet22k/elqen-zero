@@ -39,9 +39,10 @@ type ComposerProps = {
   isStickerCatalogLoading?: boolean;
   onSend: (payload: ComposerSendPayload) => Promise<void>;
   onSendSticker?: (platformStickerId: string) => Promise<void>;
+  onComposeActivityChange?: (active: boolean) => void;
 };
 
-type UtilityPanelTab = "emoji" | "stickers";
+type UtilityPanelTab = "canned" | "emoji" | "stickers";
 
 const getChannelLabel = (channel?: Channel | null) => {
   if (!channel) {
@@ -130,6 +131,7 @@ export function Composer({
   isStickerCatalogLoading = false,
   onSend,
   onSendSticker,
+  onComposeActivityChange,
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -314,12 +316,20 @@ export function Composer({
     }
   };
 
-  const handleTogglePanel = (nextPanel: UtilityPanelTab) => {
+  const handleTogglePanel = () => {
     if (sending) {
       return;
     }
 
-    setActiveUtilityPanel((current) => (current === nextPanel ? null : nextPanel));
+    setActiveUtilityPanel((current) => (current ? null : "emoji"));
+  };
+
+  const handleOpenCannedReplies = () => {
+    if (sending) {
+      return;
+    }
+
+    setActiveUtilityPanel((current) => (current === "canned" ? null : "canned"));
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
@@ -356,6 +366,12 @@ export function Composer({
   useEffect(() => {
     syncTextareaSelection();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      onComposeActivityChange?.(false);
+    };
+  }, [onComposeActivityChange]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -489,11 +505,15 @@ export function Composer({
           placeholder="Write a message..."
           value={text}
           onChange={(event) => setText(event.target.value)}
+          onFocus={() => onComposeActivityChange?.(true)}
           onClick={syncTextareaSelection}
           onKeyDown={handleKeyDown}
           onKeyUp={syncTextareaSelection}
           onSelect={syncTextareaSelection}
-          onBlur={syncTextareaSelection}
+          onBlur={() => {
+            syncTextareaSelection();
+            onComposeActivityChange?.(false);
+          }}
           rows={1}
           className="min-h-6 max-h-50 flex-1 resize-none overflow-y-auto bg-transparent text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:text-slate-400"
         />
@@ -503,6 +523,19 @@ export function Composer({
             <div className="absolute right-0 bottom-11 z-20 w-88 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
               <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
                 <div className="inline-flex items-center rounded-full bg-white p-1 shadow-sm">
+                  <button
+                    type="button"
+                    className={[
+                      "rounded-full px-3 py-1 text-xs font-semibold transition",
+                      activeUtilityPanel === "canned"
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-500 hover:text-slate-800",
+                    ].join(" ")}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setActiveUtilityPanel("canned")}
+                  >
+                    Canned
+                  </button>
                   <button
                     type="button"
                     className={[
@@ -539,7 +572,35 @@ export function Composer({
               </div>
 
               <div className="max-h-96 overflow-y-auto p-3">
-                {activeUtilityPanel === "emoji" ? (
+                {activeUtilityPanel === "canned" ? (
+                  <div className="space-y-1">
+                    {cannedReplies.filter((item) => item.isActive !== false).length ? (
+                      cannedReplies
+                        .filter((item) => item.isActive !== false)
+                        .slice(0, 12)
+                        .map((reply) => (
+                          <button
+                            key={reply._id}
+                            type="button"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-100"
+                            onClick={() => {
+                              applyCannedReply(reply.body);
+                              setActiveUtilityPanel(null);
+                            }}
+                          >
+                            <p className="truncate text-sm font-semibold text-slate-800">
+                              {reply.title}
+                            </p>
+                            <p className="truncate text-xs text-slate-500">{reply.body}</p>
+                          </button>
+                        ))
+                    ) : (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+                        No active canned replies yet.
+                      </div>
+                    )}
+                  </div>
+                ) : activeUtilityPanel === "emoji" ? (
                   <div className="overflow-hidden rounded-xl border border-slate-200">
                     <Suspense
                       fallback={
@@ -648,12 +709,40 @@ export function Composer({
           <button
             type="button"
             className={[
-              "rounded-full p-1 text-slate-400 transition-colors hover:text-slate-600",
-              activeUtilityPanel === "emoji" ? "text-slate-700" : "",
+              "rounded-full p-1 text-slate-400 transition-colors hover:text-slate-700",
+              activeUtilityPanel === "canned" ? "text-slate-700" : "",
             ].join(" ")}
-            aria-label="Emoji"
+            aria-label="Open canned replies"
+            title="Canned replies"
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => handleTogglePanel("emoji")}
+            onClick={handleOpenCannedReplies}
+            disabled={sending}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.75}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 12h7" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 16h5" />
+              <rect x="4" y="5" width="16" height="14" rx="2" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            className={[
+              "rounded-full p-1 text-slate-400 transition-colors hover:text-slate-700",
+              activeUtilityPanel ? "text-slate-700" : "",
+            ].join(" ")}
+            aria-label="Open emoji and sticker tools"
+            title="Emoji and stickers"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={handleTogglePanel}
             disabled={sending}
           >
             <svg
@@ -671,35 +760,6 @@ export function Composer({
               />
             </svg>
           </button>
-
-          {canUseStickerPicker ? (
-            <button
-              type="button"
-              className={[
-                "rounded-full p-1 text-slate-400 transition-colors hover:text-slate-600",
-                activeUtilityPanel === "stickers" ? "text-slate-700" : "",
-              ].join(" ")}
-              aria-label="Open sticker picker"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => handleTogglePanel("stickers")}
-              disabled={sending}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.75}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M7 3h10a2 2 0 012 2v10a2 2 0 01-2 2h-4l-4 4v-4H7a2 2 0 01-2-2V5a2 2 0 012-2z"
-                />
-              </svg>
-            </button>
-          ) : null}
 
           <button
             type="submit"
