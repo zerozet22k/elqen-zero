@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
+    "app": "npm run dev --prefix client",
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "dev:public": "concurrently \"npm run dev:public --prefix server\" \"npm run dev --prefix client\"",
     "docker:build": "node scripts/build-images.mjs",
