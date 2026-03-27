@@ -1,4 +1,5 @@
 import {
+  useCallback,
   createContext,
   ReactNode,
   useContext,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import { apiRequest, setApiAuthContext } from "../services/api";
 import { SessionData } from "../types/models";
+import { isWorkspaceAdminRole } from "../utils/workspace-role";
 
 const STORAGE_KEY = "omni-chat-session";
 
@@ -16,6 +18,9 @@ export type TenantMode = "single" | "multi";
 export type DeploymentConfig = {
   tenantMode: TenantMode;
   allowSignup: boolean;
+  allowWorkspaceCreation: boolean;
+  defaultWorkspaceSlug: string | null;
+  googleAuthEnabled: boolean;
 };
 
 /** Read deployment config from build-time VITE_ env. */
@@ -25,6 +30,9 @@ const readDeploymentConfig = (): DeploymentConfig => ({
       ? "single"
       : "multi",
   allowSignup: import.meta.env.VITE_ALLOW_SIGNUP !== "false",
+  allowWorkspaceCreation: true,
+  defaultWorkspaceSlug: null,
+  googleAuthEnabled: false,
 });
 
 type SessionContextValue = {
@@ -50,6 +58,22 @@ type SessionContextValue = {
     password: string;
     name?: string;
   }) => Promise<void>;
+  createWorkspace: (payload: {
+    workspaceName: string;
+    workspaceSlug: string;
+    timeZone?: string;
+    billingSelection?:
+      | {
+          type: "existing";
+          billingAccountId: string;
+        }
+      | {
+          type: "new";
+          billingAccountName?: string;
+        };
+  }) => Promise<void>;
+  establishSession: (session: SessionData) => void;
+  refreshSession: () => Promise<void>;
   setActiveWorkspaceId: (workspaceId: string) => void;
   logout: () => Promise<void>;
 };
@@ -59,6 +83,54 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deployment, setDeployment] = useState<DeploymentConfig>(readDeploymentConfig());
+
+  const establishSession = useCallback((nextSession: SessionData) => {
+    setApiAuthContext({
+      token: nextSession.token,
+      workspaceId: nextSession.activeWorkspaceId,
+    });
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
+    setSession(nextSession);
+  }, []);
+
+  const refreshSession = useCallback(async () => {
+    const currentToken = session?.token;
+    if (!currentToken) {
+      return;
+    }
+
+    const me = await apiRequest<{
+      user: SessionData["user"];
+      workspaces: SessionData["workspaces"];
+      blockedAccess?: SessionData["blockedAccess"];
+      deployment?: Partial<DeploymentConfig>;
+    }>("/api/auth/me");
+
+    const fallbackWorkspaceId = me.workspaces[0]?._id ?? "";
+    const activeWorkspaceId = me.workspaces.some(
+      (workspace) => workspace._id === session?.activeWorkspaceId
+    )
+      ? session?.activeWorkspaceId ?? fallbackWorkspaceId
+      : fallbackWorkspaceId;
+
+    const nextSession: SessionData = {
+      token: currentToken,
+      user: me.user,
+      workspaces: me.workspaces,
+      activeWorkspaceId,
+      blockedAccess: me.blockedAccess ?? null,
+    };
+
+    establishSession(nextSession);
+
+    if (me.deployment) {
+      setDeployment((current) => ({
+        ...current,
+        ...me.deployment,
+      }));
+    }
+  }, [establishSession, session?.activeWorkspaceId, session?.token]);
 
   useEffect(() => {
     const hydrate = async () => {
@@ -78,6 +150,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const me = await apiRequest<{
           user: SessionData["user"];
           workspaces: SessionData["workspaces"];
+          blockedAccess?: SessionData["blockedAccess"];
+          deployment?: Partial<DeploymentConfig>;
         }>("/api/auth/me");
 
         const fallbackWorkspaceId = me.workspaces[0]?._id ?? "";
@@ -92,14 +166,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           user: me.user,
           workspaces: me.workspaces,
           activeWorkspaceId,
+          blockedAccess: me.blockedAccess ?? null,
         };
 
-        setApiAuthContext({
-          token: nextSession.token,
-          workspaceId: nextSession.activeWorkspaceId,
-        });
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
-        setSession(nextSession);
+        establishSession(nextSession);
+
+        if (me.deployment) {
+          setDeployment((current) => ({
+            ...current,
+            ...me.deployment,
+          }));
+        }
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
         setApiAuthContext({ token: null, workspaceId: null });
@@ -110,6 +187,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
 
     void hydrate();
+  }, [establishSession]);
+
+  useEffect(() => {
+    const loadDeployment = async () => {
+      try {
+        const response = await apiRequest<{
+          deployment: Partial<DeploymentConfig>;
+        }>("/api/auth/deployment");
+        setDeployment((current) => ({
+          ...current,
+          ...response.deployment,
+        }));
+      } catch {
+        // Keep build-time defaults when the public deployment endpoint is unavailable.
+      }
+    };
+
+    void loadDeployment();
   }, []);
 
   const login = async (payload: {
@@ -120,12 +215,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    setApiAuthContext({
-      token: nextSession.token,
-      workspaceId: nextSession.activeWorkspaceId,
-    });
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
-    setSession(nextSession);
+    establishSession(nextSession);
   };
 
   const register = async (payload: {
@@ -140,12 +230,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    setApiAuthContext({
-      token: nextSession.token,
-      workspaceId: nextSession.activeWorkspaceId,
-    });
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
-    setSession(nextSession);
+    establishSession(nextSession);
   };
 
   const acceptInvite = async (payload: {
@@ -157,12 +242,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    setApiAuthContext({
-      token: nextSession.token,
-      workspaceId: nextSession.activeWorkspaceId,
+    establishSession(nextSession);
+  };
+
+  const createWorkspace = async (payload: {
+    workspaceName: string;
+    workspaceSlug: string;
+    timeZone?: string;
+    billingSelection?:
+      | {
+          type: "existing";
+          billingAccountId: string;
+        }
+      | {
+          type: "new";
+          billingAccountName?: string;
+        };
+  }) => {
+    const nextSession = await apiRequest<SessionData>("/api/auth/workspaces", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
-    setSession(nextSession);
+    establishSession(nextSession);
   };
 
   const setActiveWorkspaceId = (workspaceId: string) => {
@@ -200,10 +301,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     );
   }, [session]);
 
-  const isAdmin =
-    activeWorkspace?.role === "owner" || activeWorkspace?.role === "admin";
-
-  const deployment = useMemo(() => readDeploymentConfig(), []);
+  const isAdmin = isWorkspaceAdminRole(activeWorkspace?.workspaceRole);
 
   const logout = async () => {
     if (session?.token) {
@@ -231,6 +329,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         login,
         register,
         acceptInvite,
+        createWorkspace,
+        establishSession,
+        refreshSession,
         setActiveWorkspaceId,
         logout,
       }}

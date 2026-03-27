@@ -31,7 +31,25 @@ export const errorHandler = (
     return;
   }
 
-  logger.error("Unhandled error", error);
+  const normalizedError =
+    error instanceof Error
+      ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          ...(error && typeof error === "object" && "code" in error
+            ? { code: (error as { code?: unknown }).code }
+            : {}),
+          ...(error && typeof error === "object" && "keyPattern" in error
+            ? { keyPattern: (error as { keyPattern?: unknown }).keyPattern }
+            : {}),
+          ...(error && typeof error === "object" && "keyValue" in error
+            ? { keyValue: (error as { keyValue?: unknown }).keyValue }
+            : {}),
+        }
+      : { value: error };
+
+  logger.error("Unhandled error", normalizedError);
   res.status(500).json({
     error: {
       code: "INTERNAL_SERVER_ERROR",

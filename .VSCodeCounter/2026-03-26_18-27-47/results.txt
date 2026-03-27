@@ -1,0 +1,303 @@
+Date : 2026-03-26 18:27:47
+Directory : c:\Code\omni-chat
+Total : 231 files,  50704 codes, 89 comments, 4975 blanks, all 55768 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| TypeScript         |        155 |     25,104 |         79 |      3,052 |     28,235 |
+| TypeScript JSX     |         48 |     15,753 |          7 |      1,605 |     17,365 |
+| JSON               |          8 |      8,618 |          0 |          7 |      8,625 |
+| Markdown           |          7 |        927 |          0 |        262 |      1,189 |
+| JavaScript         |          2 |        174 |          1 |         40 |        215 |
+| XML                |          7 |         62 |          2 |          5 |         69 |
+| JSON with Comments |          2 |         53 |          0 |          2 |         55 |
+| HTML               |          1 |         12 |          0 |          1 |         13 |
+| PostCSS            |          1 |          1 |          0 |          1 |          2 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++-----------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                        | files      | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                           |        231 |     50,704 |         89 |      4,975 |     55,768 |
+| . (Files)                                                                   |          6 |        761 |          0 |         53 |        814 |
+| client                                                                      |         84 |     21,530 |         19 |      1,837 |     23,386 |
+| client (Files)                                                              |          5 |      4,037 |          0 |          6 |      4,043 |
+| client\public                                                               |          7 |         62 |          2 |          5 |         69 |
+| client\public\platform-icons                                                |          7 |         62 |          2 |          5 |         69 |
+| client\src                                                                  |         72 |     17,431 |         17 |      1,826 |     19,274 |
+| client\src (Files)                                                          |          4 |        226 |          1 |         35 |        262 |
+| client\src\components                                                       |          4 |        761 |          0 |         77 |        838 |
+| client\src\content                                                          |          1 |         84 |          0 |          6 |         90 |
+| client\src\features                                                         |         19 |      3,153 |          3 |        387 |      3,543 |
+| client\src\features\channels                                                |          1 |        111 |          0 |         12 |        123 |
+| client\src\features\inbox                                                   |          9 |      2,702 |          3 |        329 |      3,034 |
+| client\src\features\portal                                                  |          4 |        163 |          0 |         28 |        191 |
+| client\src\features\ui                                                      |          5 |        177 |          0 |         18 |        195 |
+| client\src\hooks                                                            |          1 |        289 |          3 |         37 |        329 |
+| client\src\pages                                                            |         30 |     11,886 |          3 |      1,179 |     13,068 |
+| client\src\services                                                         |          3 |        116 |          0 |         19 |        135 |
+| client\src\types                                                            |          2 |        680 |          0 |         43 |        723 |
+| client\src\utils                                                            |          8 |        236 |          7 |         43 |        286 |
+| docs                                                                        |          3 |        507 |          0 |        211 |        718 |
+| scripts                                                                     |          1 |         14 |          0 |          5 |         19 |
+| server                                                                      |        137 |     27,892 |         70 |      2,869 |     30,831 |
+| server (Files)                                                              |          3 |      4,268 |          0 |          3 |      4,271 |
+| server\scripts                                                              |          1 |        160 |          1 |         35 |        196 |
+| server\src                                                                  |        133 |     23,464 |         69 |      2,831 |     26,364 |
+| server\src (Files)                                                          |          2 |        185 |          0 |         20 |        205 |
+| server\src\billing                                                          |          1 |         35 |          0 |          2 |         37 |
+| server\src\channels                                                         |         10 |      3,153 |          4 |        278 |      3,435 |
+| server\src\config                                                           |          1 |        129 |          4 |         12 |        145 |
+| server\src\lib                                                              |         12 |        900 |          9 |        144 |      1,053 |
+| server\src\middleware                                                       |          5 |        207 |          5 |         37 |        249 |
+| server\src\models                                                           |         27 |      1,482 |          5 |        139 |      1,626 |
+| server\src\routes                                                           |         32 |      4,923 |         23 |        641 |      5,587 |
+| server\src\routes\api                                                       |         15 |      3,533 |         15 |        482 |      4,030 |
+| server\src\routes\public                                                    |         10 |      1,077 |          0 |         95 |      1,172 |
+| server\src\routes\webhooks                                                  |          7 |        313 |          8 |         64 |        385 |
+| server\src\scripts                                                          |          1 |        413 |          0 |         21 |        434 |
+| server\src\services                                                         |         39 |     11,419 |         19 |      1,469 |     12,907 |
+| server\src\tests                                                            |          1 |        597 |          0 |         62 |        659 |
+| server\src\types                                                            |          2 |         21 |          0 |          6 |         27 |
++-----------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++-----------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                                    | language           | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| c:\Code\omni-chat\AGENTS.md                                                 | Markdown           |        112 |          0 |         23 |        135 |
+| c:\Code\omni-chat\APPREADME.md                                              | Markdown           |         29 |          0 |         11 |         40 |
+| c:\Code\omni-chat\PLANS.md                                                  | Markdown           |         71 |          0 |         15 |         86 |
+| c:\Code\omni-chat\README.md                                                 | Markdown           |        208 |          0 |          2 |        210 |
+| c:\Code\omni-chat\client\index.html                                         | HTML               |         12 |          0 |          1 |         13 |
+| c:\Code\omni-chat\client\package-lock.json                                  | JSON               |      3,953 |          0 |          1 |      3,954 |
+| c:\Code\omni-chat\client\package.json                                       | JSON               |         34 |          0 |          1 |         35 |
+| c:\Code\omni-chat\client\public\platform-icons\facebook.svg                 | XML                |         13 |          1 |          3 |         17 |
+| c:\Code\omni-chat\client\public\platform-icons\instagram.svg                | XML                |         14 |          0 |          1 |         15 |
+| c:\Code\omni-chat\client\public\platform-icons\line.svg                     | XML                |          1 |          0 |          0 |          1 |
+| c:\Code\omni-chat\client\public\platform-icons\telegram.svg                 | XML                |         11 |          0 |          0 |         11 |
+| c:\Code\omni-chat\client\public\platform-icons\tiktok.svg                   | XML                |          5 |          1 |          0 |          6 |
+| c:\Code\omni-chat\client\public\platform-icons\viber.svg                    | XML                |          7 |          0 |          0 |          7 |
+| c:\Code\omni-chat\client\public\platform-icons\website.svg                  | XML                |         11 |          0 |          1 |         12 |
+| c:\Code\omni-chat\client\src\App.tsx                                        | TypeScript JSX     |        210 |          0 |         31 |        241 |
+| c:\Code\omni-chat\client\src\components\LegalDocumentPage.tsx               | TypeScript JSX     |         55 |          0 |          8 |         63 |
+| c:\Code\omni-chat\client\src\components\PublicSiteShell.tsx                 | TypeScript JSX     |        127 |          0 |         16 |        143 |
+| c:\Code\omni-chat\client\src\components\app-shell.tsx                       | TypeScript JSX     |        497 |          0 |         45 |        542 |
+| c:\Code\omni-chat\client\src\components\portal-shell.tsx                    | TypeScript JSX     |         82 |          0 |          8 |         90 |
+| c:\Code\omni-chat\client\src\content\site.ts                                | TypeScript         |         84 |          0 |          6 |         90 |
+| c:\Code\omni-chat\client\src\features\channels\ChannelConnectionCard.tsx    | TypeScript JSX     |        111 |          0 |         12 |        123 |
+| c:\Code\omni-chat\client\src\features\inbox\ChannelBadge.tsx                | TypeScript JSX     |         55 |          0 |          3 |         58 |
+| c:\Code\omni-chat\client\src\features\inbox\Composer.tsx                    | TypeScript JSX     |        765 |          0 |         74 |        839 |
+| c:\Code\omni-chat\client\src\features\inbox\ContactPanel.tsx                | TypeScript JSX     |        690 |          0 |         83 |        773 |
+| c:\Code\omni-chat\client\src\features\inbox\ConversationList.tsx            | TypeScript JSX     |        198 |          0 |         23 |        221 |
+| c:\Code\omni-chat\client\src\features\inbox\ThreadView.tsx                  | TypeScript JSX     |        596 |          1 |         66 |        663 |
+| c:\Code\omni-chat\client\src\features\inbox\conversation-state.ts           | TypeScript         |        217 |          0 |         49 |        266 |
+| c:\Code\omni-chat\client\src\features\inbox\inbox-state.ts                  | TypeScript         |         46 |          0 |         11 |         57 |
+| c:\Code\omni-chat\client\src\features\inbox\sticker-catalog.ts              | TypeScript         |         36 |          0 |          4 |         40 |
+| c:\Code\omni-chat\client\src\features\inbox\thread-media-utils.ts           | TypeScript         |         99 |          2 |         16 |        117 |
+| c:\Code\omni-chat\client\src\features\portal\billing-form-helpers.ts        | TypeScript         |         72 |          0 |          5 |         77 |
+| c:\Code\omni-chat\client\src\features\portal\portal-display.ts              | TypeScript         |         41 |          0 |         12 |         53 |
+| c:\Code\omni-chat\client\src\features\portal\portal-workspace-context.ts    | TypeScript         |         18 |          0 |          3 |         21 |
+| c:\Code\omni-chat\client\src\features\portal\portal-workspace-helpers.ts    | TypeScript         |         32 |          0 |          8 |         40 |
+| c:\Code\omni-chat\client\src\features\ui\FilterChip.tsx                     | TypeScript JSX     |         21 |          0 |          1 |         22 |
+| c:\Code\omni-chat\client\src\features\ui\MetricCard.tsx                     | TypeScript JSX     |         16 |          0 |          1 |         17 |
+| c:\Code\omni-chat\client\src\features\ui\Select.tsx                         | TypeScript JSX     |         41 |          0 |          3 |         44 |
+| c:\Code\omni-chat\client\src\features\ui\StatusBadge.tsx                    | TypeScript JSX     |         29 |          0 |          3 |         32 |
+| c:\Code\omni-chat\client\src\features\ui\ToastStack.tsx                     | TypeScript JSX     |         70 |          0 |         10 |         80 |
+| c:\Code\omni-chat\client\src\hooks\use-session.tsx                          | TypeScript JSX     |        289 |          3 |         37 |        329 |
+| c:\Code\omni-chat\client\src\index.css                                      | PostCSS            |          1 |          0 |          1 |          2 |
+| c:\Code\omni-chat\client\src\main.tsx                                       | TypeScript JSX     |         15 |          0 |          2 |         17 |
+| c:\Code\omni-chat\client\src\pages\AISettingsPage.tsx                       | TypeScript JSX     |        656 |          0 |         62 |        718 |
+| c:\Code\omni-chat\client\src\pages\AcceptInvitePage.tsx                     | TypeScript JSX     |        186 |          0 |         24 |        210 |
+| c:\Code\omni-chat\client\src\pages\AccountPage.tsx                          | TypeScript JSX     |        254 |          0 |         31 |        285 |
+| c:\Code\omni-chat\client\src\pages\AnalyticsPage.tsx                        | TypeScript JSX     |        294 |          0 |         41 |        335 |
+| c:\Code\omni-chat\client\src\pages\AutomationsPage.tsx                      | TypeScript JSX     |        331 |          0 |         43 |        374 |
+| c:\Code\omni-chat\client\src\pages\CannedRepliesPage.tsx                    | TypeScript JSX     |        521 |          0 |         63 |        584 |
+| c:\Code\omni-chat\client\src\pages\ChannelsPage.tsx                         | TypeScript JSX     |      1,461 |          0 |        158 |      1,619 |
+| c:\Code\omni-chat\client\src\pages\CreateWorkspacePage.tsx                  | TypeScript JSX     |        145 |          0 |         21 |        166 |
+| c:\Code\omni-chat\client\src\pages\DataDeletionPage.tsx                     | TypeScript JSX     |         38 |          0 |          3 |         41 |
+| c:\Code\omni-chat\client\src\pages\InboxPage.tsx                            | TypeScript JSX     |      1,844 |          3 |        225 |      2,072 |
+| c:\Code\omni-chat\client\src\pages\KnowledgePage.tsx                        | TypeScript JSX     |        503 |          0 |         65 |        568 |
+| c:\Code\omni-chat\client\src\pages\LandingPage.tsx                          | TypeScript JSX     |        260 |          0 |         19 |        279 |
+| c:\Code\omni-chat\client\src\pages\LoginPage.tsx                            | TypeScript JSX     |        312 |          0 |         48 |        360 |
+| c:\Code\omni-chat\client\src\pages\PortalDashboardPage.tsx                  | TypeScript JSX     |        227 |          0 |         15 |        242 |
+| c:\Code\omni-chat\client\src\pages\PortalPlanCatalogPage.tsx                | TypeScript JSX     |        457 |          0 |         27 |        484 |
+| c:\Code\omni-chat\client\src\pages\PortalPlansPage.tsx                      | TypeScript JSX     |        387 |          0 |         24 |        411 |
+| c:\Code\omni-chat\client\src\pages\PortalStaffPage.tsx                      | TypeScript JSX     |        246 |          0 |         17 |        263 |
+| c:\Code\omni-chat\client\src\pages\PortalWorkspaceAuditPage.tsx             | TypeScript JSX     |         63 |          0 |          4 |         67 |
+| c:\Code\omni-chat\client\src\pages\PortalWorkspaceBillingPage.tsx           | TypeScript JSX     |        680 |          0 |         41 |        721 |
+| c:\Code\omni-chat\client\src\pages\PortalWorkspaceChannelsPage.tsx          | TypeScript JSX     |        193 |          0 |         14 |        207 |
+| c:\Code\omni-chat\client\src\pages\PortalWorkspaceLayout.tsx                | TypeScript JSX     |        230 |          0 |         14 |        244 |
+| c:\Code\omni-chat\client\src\pages\PortalWorkspaceMembersPage.tsx           | TypeScript JSX     |        152 |          0 |          8 |        160 |
+| c:\Code\omni-chat\client\src\pages\PortalWorkspacePage.tsx                  | TypeScript JSX     |        184 |          0 |          9 |        193 |
+| c:\Code\omni-chat\client\src\pages\PrivacyPage.tsx                          | TypeScript JSX     |         28 |          0 |          2 |         30 |
+| c:\Code\omni-chat\client\src\pages\PublicWorkspacePage.tsx                  | TypeScript JSX     |        482 |          0 |         44 |        526 |
+| c:\Code\omni-chat\client\src\pages\StickerLibraryPage.tsx                   | TypeScript JSX     |        587 |          0 |         62 |        649 |
+| c:\Code\omni-chat\client\src\pages\TermsPage.tsx                            | TypeScript JSX     |         27 |          0 |          2 |         29 |
+| c:\Code\omni-chat\client\src\pages\WorkspaceMembersPage.tsx                 | TypeScript JSX     |        385 |          0 |         34 |        419 |
+| c:\Code\omni-chat\client\src\pages\WorkspaceProfilePage.tsx                 | TypeScript JSX     |        503 |          0 |         32 |        535 |
+| c:\Code\omni-chat\client\src\pages\WorkspacesPage.tsx                       | TypeScript JSX     |        250 |          0 |         27 |        277 |
+| c:\Code\omni-chat\client\src\services\api-base.ts                           | TypeScript         |         13 |          0 |          3 |         16 |
+| c:\Code\omni-chat\client\src\services\api.ts                                | TypeScript         |         75 |          0 |         13 |         88 |
+| c:\Code\omni-chat\client\src\services\realtime.ts                           | TypeScript         |         28 |          0 |          3 |         31 |
+| c:\Code\omni-chat\client\src\types\models.ts                                | TypeScript         |        587 |          0 |         35 |        622 |
+| c:\Code\omni-chat\client\src\types\outbound-content.ts                      | TypeScript         |         93 |          0 |          8 |        101 |
+| c:\Code\omni-chat\client\src\utils\assistant-model-options.json             | JSON               |         19 |          0 |          1 |         20 |
+| c:\Code\omni-chat\client\src\utils\gemini-model-options.json                | JSON               |         29 |          0 |          0 |         29 |
+| c:\Code\omni-chat\client\src\utils\inbound-notification.test.ts             | TypeScript         |         62 |          0 |          9 |         71 |
+| c:\Code\omni-chat\client\src\utils\inbound-notification.ts                  | TypeScript         |         29 |          7 |          7 |         43 |
+| c:\Code\omni-chat\client\src\utils\platform-icons.ts                        | TypeScript         |         15 |          0 |          3 |         18 |
+| c:\Code\omni-chat\client\src\utils\platform-role.ts                         | TypeScript         |         27 |          0 |          9 |         36 |
+| c:\Code\omni-chat\client\src\utils\workspace-role.ts                        | TypeScript         |         16 |          0 |          6 |         22 |
+| c:\Code\omni-chat\client\src\utils\workspace-routes.ts                      | TypeScript         |         39 |          0 |          8 |         47 |
+| c:\Code\omni-chat\client\src\vite-env.d.ts                                  | TypeScript         |          0 |          1 |          1 |          2 |
+| c:\Code\omni-chat\client\tsconfig.json                                      | JSON with Comments |         27 |          0 |          1 |         28 |
+| c:\Code\omni-chat\client\vite.config.ts                                     | TypeScript         |         11 |          0 |          2 |         13 |
+| c:\Code\omni-chat\docs\api-contracts.md                                     | Markdown           |        234 |          0 |        100 |        334 |
+| c:\Code\omni-chat\docs\messaging-architecture.md                            | Markdown           |        199 |          0 |         69 |        268 |
+| c:\Code\omni-chat\docs\migration-notes.md                                   | Markdown           |         74 |          0 |         42 |        116 |
+| c:\Code\omni-chat\package-lock.json                                         | JSON               |        329 |          0 |          1 |        330 |
+| c:\Code\omni-chat\package.json                                              | JSON               |         12 |          0 |          1 |         13 |
+| c:\Code\omni-chat\scripts\ensure-env.mjs                                    | JavaScript         |         14 |          0 |          5 |         19 |
+| c:\Code\omni-chat\server\package-lock.json                                  | JSON               |      4,202 |          0 |          1 |      4,203 |
+| c:\Code\omni-chat\server\package.json                                       | JSON               |         40 |          0 |          1 |         41 |
+| c:\Code\omni-chat\server\scripts\dev-public-cloudflare.mjs                  | JavaScript         |        160 |          1 |         35 |        196 |
+| c:\Code\omni-chat\server\src\app.ts                                         | TypeScript         |        156 |          0 |         16 |        172 |
+| c:\Code\omni-chat\server\src\billing\constants.ts                           | TypeScript         |         35 |          0 |          2 |         37 |
+| c:\Code\omni-chat\server\src\channels\adapter.registry.ts                   | TypeScript         |         34 |          0 |          7 |         41 |
+| c:\Code\omni-chat\server\src\channels\base.adapter.ts                       | TypeScript         |        112 |          0 |         15 |        127 |
+| c:\Code\omni-chat\server\src\channels\facebook.adapter.ts                   | TypeScript         |        322 |          2 |         33 |        357 |
+| c:\Code\omni-chat\server\src\channels\instagram.adapter.ts                  | TypeScript         |        299 |          0 |         29 |        328 |
+| c:\Code\omni-chat\server\src\channels\line.adapter.ts                       | TypeScript         |        416 |          1 |         48 |        465 |
+| c:\Code\omni-chat\server\src\channels\telegram.adapter.ts                   | TypeScript         |        846 |          1 |         55 |        902 |
+| c:\Code\omni-chat\server\src\channels\tiktok.adapter.ts                     | TypeScript         |        338 |          0 |         29 |        367 |
+| c:\Code\omni-chat\server\src\channels\types.ts                              | TypeScript         |        249 |          0 |         18 |        267 |
+| c:\Code\omni-chat\server\src\channels\viber.adapter.ts                      | TypeScript         |        405 |          0 |         32 |        437 |
+| c:\Code\omni-chat\server\src\channels\website.adapter.ts                    | TypeScript         |        132 |          0 |         12 |        144 |
+| c:\Code\omni-chat\server\src\config\env.ts                                  | TypeScript         |        129 |          4 |         12 |        145 |
+| c:\Code\omni-chat\server\src\lib\async-handler.ts                           | TypeScript         |          8 |          0 |          2 |         10 |
+| c:\Code\omni-chat\server\src\lib\bot-pause.ts                               | TypeScript         |         47 |          0 |          8 |         55 |
+| c:\Code\omni-chat\server\src\lib\conversation-ai-state.ts                   | TypeScript         |         40 |          0 |         11 |         51 |
+| c:\Code\omni-chat\server\src\lib\crypto.ts                                  | TypeScript         |         52 |          9 |          5 |         66 |
+| c:\Code\omni-chat\server\src\lib\errors.ts                                  | TypeScript         |         45 |          0 |          8 |         53 |
+| c:\Code\omni-chat\server\src\lib\logger.ts                                  | TypeScript         |         38 |          0 |         10 |         48 |
+| c:\Code\omni-chat\server\src\lib\meta-signed-request.ts                     | TypeScript         |         52 |          0 |         12 |         64 |
+| c:\Code\omni-chat\server\src\lib\mongo.ts                                   | TypeScript         |         21 |          0 |          6 |         27 |
+| c:\Code\omni-chat\server\src\lib\platform-role.ts                           | TypeScript         |         56 |          0 |         12 |         68 |
+| c:\Code\omni-chat\server\src\lib\realtime.ts                                | TypeScript         |        199 |          0 |         36 |        235 |
+| c:\Code\omni-chat\server\src\lib\validators.ts                              | TypeScript         |        299 |          0 |         23 |        322 |
+| c:\Code\omni-chat\server\src\lib\workspace-role.ts                          | TypeScript         |         43 |          0 |         11 |         54 |
+| c:\Code\omni-chat\server\src\middleware\authenticate.ts                     | TypeScript         |         52 |          0 |         10 |         62 |
+| c:\Code\omni-chat\server\src\middleware\error-handler.ts                    | TypeScript         |         55 |          0 |          5 |         60 |
+| c:\Code\omni-chat\server\src\middleware\require-platform-role.ts            | TypeScript         |         19 |          0 |          6 |         25 |
+| c:\Code\omni-chat\server\src\middleware\require-role.ts                     | TypeScript         |         17 |          0 |          4 |         21 |
+| c:\Code\omni-chat\server\src\middleware\require-workspace.ts                | TypeScript         |         64 |          5 |         12 |         81 |
+| c:\Code\omni-chat\server\src\models\ai-settings.model.ts                    | TypeScript         |         50 |          2 |          4 |         56 |
+| c:\Code\omni-chat\server\src\models\attention-item.model.ts                 | TypeScript         |        108 |          0 |          4 |        112 |
+| c:\Code\omni-chat\server\src\models\audit-log.model.ts                      | TypeScript         |         24 |          0 |          5 |         29 |
+| c:\Code\omni-chat\server\src\models\automation-rule.model.ts                | TypeScript         |         31 |          0 |          5 |         36 |
+| c:\Code\omni-chat\server\src\models\billing-account.model.ts                | TypeScript         |         34 |          1 |          4 |         39 |
+| c:\Code\omni-chat\server\src\models\billing-override.model.ts               | TypeScript         |         47 |          0 |          5 |         52 |
+| c:\Code\omni-chat\server\src\models\business-hours.model.ts                 | TypeScript         |         36 |          0 |          6 |         42 |
+| c:\Code\omni-chat\server\src\models\canned-reply.model.ts                   | TypeScript         |         25 |          0 |          5 |         30 |
+| c:\Code\omni-chat\server\src\models\channel-connection.model.ts             | TypeScript         |         63 |          0 |          7 |         70 |
+| c:\Code\omni-chat\server\src\models\contact.model.ts                        | TypeScript         |         47 |          0 |          6 |         53 |
+| c:\Code\omni-chat\server\src\models\conversation.model.ts                   | TypeScript         |         63 |          0 |          7 |         70 |
+| c:\Code\omni-chat\server\src\models\data-deletion-request.model.ts          | TypeScript         |         30 |          0 |          4 |         34 |
+| c:\Code\omni-chat\server\src\models\entitlements.model.ts                   | TypeScript         |         77 |          0 |          4 |         81 |
+| c:\Code\omni-chat\server\src\models\inbound-buffer.model.ts                 | TypeScript         |         58 |          0 |          5 |         63 |
+| c:\Code\omni-chat\server\src\models\index.ts                                | TypeScript         |         26 |          0 |          1 |         27 |
+| c:\Code\omni-chat\server\src\models\knowledge-item.model.ts                 | TypeScript         |         24 |          0 |          5 |         29 |
+| c:\Code\omni-chat\server\src\models\media-asset.model.ts                    | TypeScript         |         29 |          0 |          5 |         34 |
+| c:\Code\omni-chat\server\src\models\message-delivery.model.ts               | TypeScript         |         52 |          0 |          5 |         57 |
+| c:\Code\omni-chat\server\src\models\message.model.ts                        | TypeScript         |        133 |          0 |         10 |        143 |
+| c:\Code\omni-chat\server\src\models\plan-catalog.model.ts                   | TypeScript         |         27 |          0 |          4 |         31 |
+| c:\Code\omni-chat\server\src\models\plan-version.model.ts                   | TypeScript         |        131 |          0 |          7 |        138 |
+| c:\Code\omni-chat\server\src\models\subscription.model.ts                   | TypeScript         |         76 |          2 |          4 |         82 |
+| c:\Code\omni-chat\server\src\models\usage-summary.model.ts                  | TypeScript         |         56 |          0 |          6 |         62 |
+| c:\Code\omni-chat\server\src\models\user.model.ts                           | TypeScript         |         36 |          0 |          6 |         42 |
+| c:\Code\omni-chat\server\src\models\workspace-membership.model.ts           | TypeScript         |         77 |          0 |          6 |         83 |
+| c:\Code\omni-chat\server\src\models\workspace-sticker.model.ts              | TypeScript         |         79 |          0 |          5 |         84 |
+| c:\Code\omni-chat\server\src\models\workspace.model.ts                      | TypeScript         |         43 |          0 |          4 |         47 |
+| c:\Code\omni-chat\server\src\routes\api\account.ts                          | TypeScript         |         91 |          0 |         17 |        108 |
+| c:\Code\omni-chat\server\src\routes\api\ai-settings.ts                      | TypeScript         |        123 |          0 |         12 |        135 |
+| c:\Code\omni-chat\server\src\routes\api\audit-logs.ts                       | TypeScript         |         21 |          0 |          4 |         25 |
+| c:\Code\omni-chat\server\src\routes\api\auth.ts                             | TypeScript         |        739 |          4 |        121 |        864 |
+| c:\Code\omni-chat\server\src\routes\api\automations.ts                      | TypeScript         |         87 |          0 |          9 |         96 |
+| c:\Code\omni-chat\server\src\routes\api\canned-replies.ts                   | TypeScript         |         80 |          0 |         11 |         91 |
+| c:\Code\omni-chat\server\src\routes\api\channels.ts                         | TypeScript         |        243 |          0 |         29 |        272 |
+| c:\Code\omni-chat\server\src\routes\api\contacts.ts                         | TypeScript         |         78 |          0 |         18 |         96 |
+| c:\Code\omni-chat\server\src\routes\api\conversations.ts                    | TypeScript         |        442 |          1 |         61 |        504 |
+| c:\Code\omni-chat\server\src\routes\api\knowledge.ts                        | TypeScript         |         80 |          0 |         11 |         91 |
+| c:\Code\omni-chat\server\src\routes\api\media-assets.ts                     | TypeScript         |         76 |          0 |         17 |         93 |
+| c:\Code\omni-chat\server\src\routes\api\portal.ts                           | TypeScript         |        782 |          0 |         86 |        868 |
+| c:\Code\omni-chat\server\src\routes\api\stickers.ts                         | TypeScript         |        237 |         10 |         25 |        272 |
+| c:\Code\omni-chat\server\src\routes\api\workspace-members.ts                | TypeScript         |        312 |          0 |         43 |        355 |
+| c:\Code\omni-chat\server\src\routes\api\workspace-profile.ts                | TypeScript         |        142 |          0 |         18 |        160 |
+| c:\Code\omni-chat\server\src\routes\public\facebook-oauth.ts                | TypeScript         |        111 |          0 |          7 |        118 |
+| c:\Code\omni-chat\server\src\routes\public\google-oauth.ts                  | TypeScript         |        101 |          0 |          6 |        107 |
+| c:\Code\omni-chat\server\src\routes\public\line-media.ts                    | TypeScript         |         19 |          0 |          5 |         24 |
+| c:\Code\omni-chat\server\src\routes\public\media-assets.ts                  | TypeScript         |         19 |          0 |          5 |         24 |
+| c:\Code\omni-chat\server\src\routes\public\meta-data-deletion.ts            | TypeScript         |        190 |          0 |         19 |        209 |
+| c:\Code\omni-chat\server\src\routes\public\meta-deauthorize.ts              | TypeScript         |        105 |          0 |         11 |        116 |
+| c:\Code\omni-chat\server\src\routes\public\sticker-previews.ts              | TypeScript         |         22 |          0 |          6 |         28 |
+| c:\Code\omni-chat\server\src\routes\public\tiktok-media.ts                  | TypeScript         |         22 |          0 |          6 |         28 |
+| c:\Code\omni-chat\server\src\routes\public\tiktok-shop-oauth.ts             | TypeScript         |        325 |          0 |          5 |        330 |
+| c:\Code\omni-chat\server\src\routes\public\workspace-public.ts              | TypeScript         |        163 |          0 |         25 |        188 |
+| c:\Code\omni-chat\server\src\routes\webhooks\facebook.ts                    | TypeScript         |         70 |          1 |         12 |         83 |
+| c:\Code\omni-chat\server\src\routes\webhooks\instagram.ts                   | TypeScript         |         58 |          1 |         11 |         70 |
+| c:\Code\omni-chat\server\src\routes\webhooks\line.ts                        | TypeScript         |         52 |          1 |         10 |         63 |
+| c:\Code\omni-chat\server\src\routes\webhooks\telegram.ts                    | TypeScript         |         29 |          1 |          7 |         37 |
+| c:\Code\omni-chat\server\src\routes\webhooks\tiktok.ts                      | TypeScript         |         20 |          0 |          5 |         25 |
+| c:\Code\omni-chat\server\src\routes\webhooks\viber.ts                       | TypeScript         |         47 |          3 |         11 |         61 |
+| c:\Code\omni-chat\server\src\routes\webhooks\website.ts                     | TypeScript         |         37 |          1 |          8 |         46 |
+| c:\Code\omni-chat\server\src\scripts\seed.ts                                | TypeScript         |        413 |          0 |         21 |        434 |
+| c:\Code\omni-chat\server\src\server.ts                                      | TypeScript         |         29 |          0 |          4 |         33 |
+| c:\Code\omni-chat\server\src\services\ai-reply.service.ts                   | TypeScript         |        684 |          0 |         62 |        746 |
+| c:\Code\omni-chat\server\src\services\assistant-provider.service.ts         | TypeScript         |         89 |          0 |         17 |        106 |
+| c:\Code\omni-chat\server\src\services\attention-item.service.ts             | TypeScript         |        474 |          0 |         60 |        534 |
+| c:\Code\omni-chat\server\src\services\audit-log.service.ts                  | TypeScript         |         42 |          0 |          8 |         50 |
+| c:\Code\omni-chat\server\src\services\automation.service.ts                 | TypeScript         |        852 |          0 |         83 |        935 |
+| c:\Code\omni-chat\server\src\services\billing.service.ts                    | TypeScript         |      1,757 |          0 |        195 |      1,952 |
+| c:\Code\omni-chat\server\src\services\canned-reply.service.ts               | TypeScript         |        193 |          0 |         26 |        219 |
+| c:\Code\omni-chat\server\src\services\channel-connection.service.ts         | TypeScript         |      1,630 |          2 |        203 |      1,835 |
+| c:\Code\omni-chat\server\src\services\channel-support.service.ts            | TypeScript         |         66 |          0 |         10 |         76 |
+| c:\Code\omni-chat\server\src\services\contact.service.ts                    | TypeScript         |        222 |          0 |         37 |        259 |
+| c:\Code\omni-chat\server\src\services\conversation.service.ts               | TypeScript         |        347 |          0 |         47 |        394 |
+| c:\Code\omni-chat\server\src\services\email.service.ts                      | TypeScript         |         79 |          0 |          9 |         88 |
+| c:\Code\omni-chat\server\src\services\facebook-oauth.service.ts             | TypeScript         |        220 |          2 |         35 |        257 |
+| c:\Code\omni-chat\server\src\services\fixture-sticker-catalog.provider.ts   | TypeScript         |        167 |          6 |         30 |        203 |
+| c:\Code\omni-chat\server\src\services\google-auth.service.ts                | TypeScript         |        138 |          0 |         24 |        162 |
+| c:\Code\omni-chat\server\src\services\inbound-buffer.service.ts             | TypeScript         |        229 |          0 |         28 |        257 |
+| c:\Code\omni-chat\server\src\services\inbound-webhook.service.ts            | TypeScript         |        670 |          3 |        100 |        773 |
+| c:\Code\omni-chat\server\src\services\knowledge.service.ts                  | TypeScript         |        320 |          0 |         59 |        379 |
+| c:\Code\omni-chat\server\src\services\line-media-content.service.ts         | TypeScript         |         86 |          0 |         13 |         99 |
+| c:\Code\omni-chat\server\src\services\line-media-token.service.ts           | TypeScript         |         51 |          0 |          6 |         57 |
+| c:\Code\omni-chat\server\src\services\media-asset-token.service.ts          | TypeScript         |         35 |          0 |          6 |         41 |
+| c:\Code\omni-chat\server\src\services\media-asset.service.ts                | TypeScript         |         54 |          0 |         13 |         67 |
+| c:\Code\omni-chat\server\src\services\message.service.ts                    | TypeScript         |        498 |          5 |         60 |        563 |
+| c:\Code\omni-chat\server\src\services\outbound-content-executor.service.ts  | TypeScript         |        121 |          0 |         16 |        137 |
+| c:\Code\omni-chat\server\src\services\outbound-content.types.ts             | TypeScript         |         46 |          0 |          6 |         52 |
+| c:\Code\omni-chat\server\src\services\outbound-content.utils.ts             | TypeScript         |        188 |          0 |         24 |        212 |
+| c:\Code\omni-chat\server\src\services\outbound-message.service.ts           | TypeScript         |        277 |          1 |         37 |        315 |
+| c:\Code\omni-chat\server\src\services\role-model-migration.service.ts       | TypeScript         |         73 |          0 |          6 |         79 |
+| c:\Code\omni-chat\server\src\services\sticker-catalog.provider.ts           | TypeScript         |          4 |          0 |          2 |          6 |
+| c:\Code\omni-chat\server\src\services\sticker-catalog.service.ts            | TypeScript         |        289 |          0 |         25 |        314 |
+| c:\Code\omni-chat\server\src\services\sticker-catalog.types.ts              | TypeScript         |         62 |          0 |         11 |         73 |
+| c:\Code\omni-chat\server\src\services\sticker-preview-token.service.ts      | TypeScript         |         41 |          0 |          6 |         47 |
+| c:\Code\omni-chat\server\src\services\telegram-sticker-preview.service.ts   | TypeScript         |        264 |          0 |         35 |        299 |
+| c:\Code\omni-chat\server\src\services\tiktok-business-messaging.service.ts  | TypeScript         |        671 |          0 |         96 |        767 |
+| c:\Code\omni-chat\server\src\services\tiktok-media-token.service.ts         | TypeScript         |         47 |          0 |          6 |         53 |
+| c:\Code\omni-chat\server\src\services\tiktok-shop-auth.service.ts           | TypeScript         |        131 |          0 |         25 |        156 |
+| c:\Code\omni-chat\server\src\services\workspace-invite.service.ts           | TypeScript         |         24 |          0 |          8 |         32 |
+| c:\Code\omni-chat\server\src\services\workspace-sticker-catalog.provider.ts | TypeScript         |         11 |          0 |          2 |         13 |
+| c:\Code\omni-chat\server\src\services\workspace-sticker.service.ts          | TypeScript         |        267 |          0 |         33 |        300 |
+| c:\Code\omni-chat\server\src\tests\attention-item.service.test.ts           | TypeScript         |        597 |          0 |         62 |        659 |
+| c:\Code\omni-chat\server\src\types\auth.ts                                  | TypeScript         |         10 |          0 |          3 |         13 |
+| c:\Code\omni-chat\server\src\types\express-auth.ts                          | TypeScript         |         11 |          0 |          3 |         14 |
+| c:\Code\omni-chat\server\tsconfig.json                                      | JSON with Comments |         26 |          0 |          1 |         27 |
+| Total                                                                       |                    |     50,704 |         89 |      4,975 |     55,768 |
++-----------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+

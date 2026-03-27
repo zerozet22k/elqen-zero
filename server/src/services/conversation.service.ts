@@ -1,10 +1,21 @@
-import { CanonicalMessage } from "../channels/types";
+import { CanonicalMessage, ConversationRoutingState } from "../channels/types";
 import {
+  AttentionItemModel,
   ContactModel,
   ConversationDocument,
   ConversationModel,
   UserModel,
 } from "../models";
+import {
+  BOT_ACTIVE_ROUTING_STATE,
+  HUMAN_ACTIVE_ROUTING_STATE,
+  HUMAN_HANDOFF_QUERY_ROUTING_STATES,
+  HUMAN_HANDOFF_QUERY_TAGS,
+  HUMAN_PENDING_ROUTING_STATE,
+  HUMAN_PENDING_TAG,
+  normalizeConversationRoutingState,
+} from "../lib/conversation-ai-state";
+import { serializeBotPause } from "../lib/bot-pause";
 
 const buildPreviewText = (message: {
   kind: string;
@@ -62,6 +73,50 @@ const buildPreviewText = (message: {
 };
 
 class ConversationService {
+  private serializeAttentionItem(
+    item: { toObject(): any } | null
+  ) {
+    if (!item) {
+      return null;
+    }
+
+    const value = item.toObject();
+    return {
+      ...value,
+      _id: String(value._id),
+      conversationId: String(value.conversationId),
+      openedByInboundMessageIds: value.openedByInboundMessageIds.map((messageId: unknown) =>
+        String(messageId)
+      ),
+      lastInboundMessageId: String(value.lastInboundMessageId),
+      assignedUserId: value.assignedUserId ? String(value.assignedUserId) : null,
+      acknowledgementMessageId: value.acknowledgementMessageId
+        ? String(value.acknowledgementMessageId)
+        : null,
+      botReplyMessageId: value.botReplyMessageId ? String(value.botReplyMessageId) : null,
+      humanReplyMessageId: value.humanReplyMessageId
+        ? String(value.humanReplyMessageId)
+        : null,
+      resolvedByUserId: value.resolvedByUserId ? String(value.resolvedByUserId) : null,
+      claimedAt: value.claimedAt?.toISOString() ?? null,
+      ...serializeBotPause(value),
+      openedAt: value.openedAt.toISOString(),
+      updatedAt: value.updatedAt.toISOString(),
+      resolvedAt: value.resolvedAt?.toISOString() ?? null,
+    };
+  }
+
+  private normalizeConversationDocument(
+    conversation: ConversationDocument | null
+  ) {
+    if (!conversation) {
+      return null;
+    }
+
+    conversation.routingState = normalizeConversationRoutingState(conversation.routingState);
+    return conversation;
+  }
+
   async findOrCreateInbound(params: {
     workspaceId: string;
     connection: {
@@ -86,7 +141,7 @@ class ConversationService {
           externalUserId: params.message.externalSenderId,
           contactId: params.contactId ?? null,
           aiEnabled: true,
-          aiState: "idle",
+          routingState: BOT_ACTIVE_ROUTING_STATE,
         },
       },
       {
@@ -110,6 +165,8 @@ class ConversationService {
     if (params.message.externalSenderId && !conversation.externalUserId) {
       conversation.externalUserId = params.message.externalSenderId;
     }
+
+    conversation.routingState = normalizeConversationRoutingState(conversation.routingState);
 
     await conversation.save();
     return conversation;
@@ -187,8 +244,8 @@ class ConversationService {
     }
     if (filters.needsHuman) {
       query.$or = [
-        { aiState: { $in: ["needs_human", "human_requested", "human_active"] } },
-        { tags: "needs_human" },
+        { routingState: { $in: HUMAN_HANDOFF_QUERY_ROUTING_STATES } },
+        { tags: { $in: HUMAN_HANDOFF_QUERY_TAGS } },
       ];
     }
     if (filters.search) {
@@ -198,6 +255,21 @@ class ConversationService {
     const conversations = await ConversationModel.find(query).sort({
       lastMessageAt: -1,
     });
+    const conversationIds = conversations.map((conversation) => String(conversation._id));
+
+    const currentAttentionItems = conversationIds.length
+      ? await AttentionItemModel.find({
+          conversationId: { $in: conversationIds },
+          resolvedAt: null,
+        }).sort({ updatedAt: -1, openedAt: -1 })
+      : [];
+    const currentAttentionItemMap = new Map<string, (typeof currentAttentionItems)[number]>();
+    for (const item of currentAttentionItems) {
+      const conversationId = String(item.conversationId);
+      if (!currentAttentionItemMap.has(conversationId)) {
+        currentAttentionItemMap.set(conversationId, item);
+      }
+    }
 
     const contactIds = conversations
       .map((item) => item.contactId)
@@ -212,7 +284,10 @@ class ConversationService {
     );
 
     const assigneeIds = conversations
-      .map((item) => item.assigneeUserId)
+      .flatMap((item) => {
+        const attentionItem = currentAttentionItemMap.get(String(item._id));
+        return [attentionItem?.assignedUserId ?? null, item.assigneeUserId ?? null];
+      })
       .filter(Boolean)
       .map((value) => String(value));
 
@@ -225,41 +300,80 @@ class ConversationService {
 
     return conversations.map((conversation) => ({
       ...conversation.toObject(),
+      routingState: normalizeConversationRoutingState(conversation.routingState),
+      ...serializeBotPause(conversation),
+      currentAttentionItemId: currentAttentionItemMap.get(String(conversation._id))
+        ? String(currentAttentionItemMap.get(String(conversation._id))!._id)
+        : null,
+      currentAttentionItem: this.serializeAttentionItem(
+        currentAttentionItemMap.get(String(conversation._id)) ?? null
+      ),
       contact: conversation.contactId
         ? contactMap.get(String(conversation.contactId))?.toObject()
         : null,
       contactName: conversation.contactId
         ? contactMap.get(String(conversation.contactId))?.primaryName ?? "Unknown contact"
         : "Unknown contact",
-      assignee: conversation.assigneeUserId
-        ? (() => {
-            const assignee = assigneeMap.get(String(conversation.assigneeUserId));
-            return assignee
-              ? {
-                  _id: String(assignee._id),
-                  name: assignee.name,
-                  avatarUrl: assignee.avatarUrl,
-                }
-              : null;
-          })()
-        : null,
+      assignee: (() => {
+        const currentAttentionItem = currentAttentionItemMap.get(
+          String(conversation._id)
+        );
+        const resolvedAssigneeId = currentAttentionItem?.assignedUserId ?? conversation.assigneeUserId;
+        if (!resolvedAssigneeId) {
+          return null;
+        }
+
+        const assignee = assigneeMap.get(String(resolvedAssigneeId));
+        return assignee
+          ? {
+              _id: String(assignee._id),
+              name: assignee.name,
+              avatarUrl: assignee.avatarUrl,
+            }
+          : null;
+      })(),
     }));
   }
 
   async getById(id: string) {
-    return ConversationModel.findById(id);
+    const conversation = await ConversationModel.findById(id);
+    return this.normalizeConversationDocument(conversation);
   }
 
   async updateById(id: string, patch: Record<string, unknown>) {
-    return ConversationModel.findByIdAndUpdate(id, { $set: patch }, { new: true });
+    const conversation = await ConversationModel.findById(id);
+    if (!conversation) {
+      return null;
+    }
+
+    const normalizedPatch = { ...patch };
+    if ("routingState" in normalizedPatch) {
+      normalizedPatch.routingState = normalizeConversationRoutingState(
+        normalizedPatch.routingState
+      );
+    } else {
+      normalizedPatch.routingState = normalizeConversationRoutingState(
+        conversation.routingState
+      );
+    }
+
+    const updatedConversation = await ConversationModel.findByIdAndUpdate(
+      id,
+      { $set: normalizedPatch },
+      { new: true, runValidators: true }
+    );
+
+    return this.normalizeConversationDocument(updatedConversation);
   }
 
-  async setAIState(id: string, aiState: string) {
-    return ConversationModel.findByIdAndUpdate(
+  async setRoutingState(id: string, routingState: ConversationRoutingState | string) {
+    const updatedConversation = await ConversationModel.findByIdAndUpdate(
       id,
-      { $set: { aiState } },
-      { new: true }
+      { $set: { routingState: normalizeConversationRoutingState(routingState) } },
+      { new: true, runValidators: true }
     );
+
+    return this.normalizeConversationDocument(updatedConversation);
   }
 
   async requestHumanHandoff(id: string) {
@@ -269,13 +383,10 @@ class ConversationService {
     }
 
     conversation.status = "pending";
-    conversation.aiState = "needs_human";
-    if (!conversation.tags.includes("needs_human")) {
-      conversation.tags.push("needs_human");
-    }
+    conversation.routingState = HUMAN_PENDING_ROUTING_STATE;
 
     await conversation.save();
-    return conversation;
+    return this.normalizeConversationDocument(conversation);
   }
 }
 

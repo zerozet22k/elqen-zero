@@ -68,10 +68,12 @@ class TelegramStickerPreviewService {
 
         return {
           id: item.id,
+          platformStickerId: item.platformStickerId,
           label: item.label,
           description: item.description,
           emoji: item.emoji,
           preview: descriptor?.preview,
+          providerMeta: item.providerMeta,
         };
       })
     );

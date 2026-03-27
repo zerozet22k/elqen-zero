@@ -12,6 +12,11 @@ const inboundBufferSchema = new Schema(
       ref: "Conversation",
       required: true,
     },
+    attentionItemId: {
+      type: Schema.Types.ObjectId,
+      ref: "AttentionItem",
+      default: null,
+    },
     status: {
       type: String,
       enum: ["pending", "processing", "processed", "cancelled"],
@@ -49,6 +54,7 @@ const inboundBufferSchema = new Schema(
 );
 
 inboundBufferSchema.index({ conversationId: 1, status: 1 });
+inboundBufferSchema.index({ attentionItemId: 1, status: 1 });
 inboundBufferSchema.index({ workspaceId: 1, status: 1 });
 
 export type InboundBufferDocument = HydratedDocument<InferSchemaType<typeof inboundBufferSchema>>;

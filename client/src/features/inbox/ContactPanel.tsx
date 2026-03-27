@@ -1,27 +1,34 @@
 import { useEffect, useState } from "react";
+import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
+import SupportAgentRoundedIcon from "@mui/icons-material/SupportAgentRounded";
+import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import {
+  AttentionItem,
   Contact,
   Conversation,
   ConversationPresenceEntry,
 } from "../../types/models";
 import { apiRequest } from "../../services/api";
 import { ChannelBadge } from "./ChannelBadge";
+import {
+  BOT_ACTIVE_ROUTING_STATE,
+  getConversationAssignmentLabel,
+  getConversationHandlingState,
+  getConversationHandlingLabel,
+  HUMAN_PENDING_TAG,
+  isHumanHandoffRoutingState,
+} from "./conversation-state";
 
-type UpdateConversationResponse =
-  | Conversation
-  | { conversation: Conversation };
+type AttentionItemsResponse = {
+  items: AttentionItem[];
+};
 
-function isConversation(value: unknown): value is Conversation {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "_id" in value &&
-    "workspaceId" in value &&
-    "channel" in value &&
-    "status" in value &&
-    "aiState" in value
-  );
-}
+type AttentionItemActionResponse = {
+  conversation: Conversation;
+  currentAttentionItem?: AttentionItem | null;
+  attentionItem?: AttentionItem | null;
+  items?: AttentionItem[];
+};
 
 type InfoBlockProps = {
   label: string;
@@ -53,9 +60,8 @@ function ActionButton(props: {
   disabled?: boolean;
   variant?: "primary" | "secondary" | "danger";
   title?: string;
-  iconOnly?: boolean;
 }) {
-  const { children, onClick, disabled, variant = "secondary", title, iconOnly = false } = props;
+  const { children, onClick, disabled, variant = "secondary", title } = props;
 
   const styles =
     variant === "primary"
@@ -71,24 +77,41 @@ function ActionButton(props: {
       disabled={disabled}
       title={title}
       aria-label={title}
-      className={`inline-flex items-center justify-center rounded-lg text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${iconOnly ? "h-8 w-8" : "px-2.5 py-1.5"} ${styles}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${styles}`}
     >
       {children}
     </button>
   );
 }
 
-const humanReadableAIState: Record<string, string> = {
-  idle: "Bot Active",
-  suggesting: "Suggesting",
-  auto_replied: "Auto Replied",
-  needs_human: "Needs Staff",
-  human_requested: "Staff Requested",
-  human_active: "Staff Active",
-};
-
 const fieldClassName =
   "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200";
+
+const humanReadableAttentionState: Record<AttentionItem["state"], string> = {
+  open: "Open",
+  bot_replied: "Bot Replied",
+  awaiting_human: "Awaiting Human",
+  human_replied: "Human Replied",
+  closed: "Closed",
+};
+
+const humanReadableNeedsHumanReason: Record<NonNullable<AttentionItem["needsHumanReason"]>, string> = {
+  low_confidence: "Low confidence",
+  manual_request: "Manual request",
+  customer_requested_human: "Customer requested human",
+  policy_block: "Policy block",
+  bot_failure: "Bot failure",
+  after_hours: "After hours",
+  other: "Other",
+};
+
+const humanReadableResolutionType: Record<NonNullable<AttentionItem["resolutionType"]>, string> = {
+  bot_reply: "Resolved by bot reply",
+  human_reply: "Resolved by human reply",
+  auto_ack_only: "Acknowledgement only",
+  ignored: "Returned to bot",
+  merged_into_newer_item: "Merged into newer item",
+};
 
 function serializePhones(phones: string[]) {
   return phones.join("\n");
@@ -105,6 +128,33 @@ function parsePhoneDraft(value: string) {
   ];
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString();
+}
+
+function getAttentionSummary(item: AttentionItem) {
+  if (item.needsHuman) {
+    return item.needsHumanReason
+      ? humanReadableNeedsHumanReason[item.needsHumanReason]
+      : "Needs human review";
+  }
+
+  if (item.resolutionType) {
+    return humanReadableResolutionType[item.resolutionType];
+  }
+
+  return humanReadableAttentionState[item.state];
+}
+
 function formatViewerName(
   entry: ConversationPresenceEntry,
   currentUserId?: string | null
@@ -112,28 +162,15 @@ function formatViewerName(
   return entry.userId === currentUserId ? "You" : entry.userName;
 }
 
-function getConversationOwnerLabel(
-  aiState: Conversation["aiState"],
-  assigneeName: string | null
-) {
-  if (aiState === "human_active") {
-    return assigneeName ?? "Human";
-  }
-
-  return null;
-}
-
 function getVisibleConversationTags(
   tags: string[],
-  aiState: Conversation["aiState"]
+  routingState: Conversation["routingState"]
 ) {
   return tags.filter(
     (tag) =>
       !(
-        tag === "needs_human" &&
-        (aiState === "needs_human" ||
-          aiState === "human_requested" ||
-          aiState === "human_active")
+        tag === HUMAN_PENDING_TAG &&
+        isHumanHandoffRoutingState(routingState)
       )
   );
 }
@@ -161,6 +198,10 @@ function getIdentityActionLabel(identity: Contact["channelIdentities"][number]) 
 
   if (identity.channel === "facebook") {
     return "Copy Facebook ID";
+  }
+
+  if (identity.channel === "instagram") {
+    return "Copy Instagram ID";
   }
 
   return "Copy user ID";
@@ -227,6 +268,8 @@ export function ContactPanel(props: {
   const [draftDeliveryAddress, setDraftDeliveryAddress] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const [draftAiNotes, setDraftAiNotes] = useState("");
+  const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
+  const [isLoadingAttentionItems, setIsLoadingAttentionItems] = useState(false);
 
   useEffect(() => {
     setDraftPhones(serializePhones(contact?.phones ?? []));
@@ -252,6 +295,39 @@ export function ContactPanel(props: {
     };
   }, [identityNotice]);
 
+  useEffect(() => {
+    if (!conversation?._id) {
+      setAttentionItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingAttentionItems(true);
+
+    void apiRequest<AttentionItemsResponse>(
+      `/api/conversations/${conversation._id}/attention-items`
+    )
+      .then((response) => {
+        if (!cancelled) {
+          setAttentionItems(response.items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAttentionItems([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingAttentionItems(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation?._id]);
+
   if (!conversation) {
     return (
       <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
@@ -267,10 +343,11 @@ export function ContactPanel(props: {
 
   const identities = contact?.channelIdentities ?? [];
   const tags = conversation.tags ?? [];
-  const aiState = conversation.aiState ?? "idle";
-  const assigneeName = conversation.assignee?.name ?? null;
-  const ownerLabel = getConversationOwnerLabel(aiState, assigneeName);
-  const visibleConversationTags = getVisibleConversationTags(tags, aiState);
+  const routingState = conversation.routingState ?? BOT_ACTIVE_ROUTING_STATE;
+  const handlingState = getConversationHandlingState(conversation);
+  const handlingLabel = getConversationHandlingLabel(conversation);
+  const assignmentLabel = getConversationAssignmentLabel(conversation, currentUserId);
+  const visibleConversationTags = getVisibleConversationTags(tags, routingState);
   const primaryIdentity =
     identities.find((identity) => identity.channel === conversation.channel) ??
     identities[0] ??
@@ -291,40 +368,36 @@ export function ContactPanel(props: {
     }
   };
 
-  const patchConversation = async (patch: Record<string, unknown>) => {
+  const currentAttentionItemId =
+    conversation.currentAttentionItem?._id ?? conversation.currentAttentionItemId ?? null;
+
+  const applyAttentionActionResponse = (response: AttentionItemActionResponse) => {
+    const nextCurrentAttentionItem = response.currentAttentionItem ?? null;
+    const updatedConversation: Conversation = {
+      ...response.conversation,
+      currentAttentionItem: nextCurrentAttentionItem,
+      currentAttentionItemId: nextCurrentAttentionItem?._id ?? null,
+    };
+
+    onConversationUpdated?.(updatedConversation);
+    setAttentionItems(response.items ?? []);
+  };
+
+  const runAttentionAction = async (params: {
+    actionPath: string;
+    fallbackMessage: string;
+  }) => {
     setIsSubmitting(true);
     setActionError(null);
 
     try {
-      const data = await apiRequest<UpdateConversationResponse>(
-        `/api/conversations/${conversation._id}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify(patch),
-        }
-      );
-
-      let updatedConversation: Conversation | null = null;
-
-      if (isConversation(data)) {
-        updatedConversation = data;
-      } else if (
-        typeof data === "object" &&
-        data !== null &&
-        "conversation" in data &&
-        isConversation((data as { conversation?: unknown }).conversation)
-      ) {
-        updatedConversation = (data as { conversation: Conversation }).conversation;
-      }
-
-      if (!updatedConversation) {
-        throw new Error("Unexpected conversation response");
-      }
-
-      onConversationUpdated?.(updatedConversation);
+      const response = await apiRequest<AttentionItemActionResponse>(params.actionPath, {
+        method: "POST",
+      });
+      applyAttentionActionResponse(response);
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : "Failed to update conversation"
+        error instanceof Error ? error.message : params.fallbackMessage
       );
     } finally {
       setIsSubmitting(false);
@@ -332,28 +405,23 @@ export function ContactPanel(props: {
   };
 
   const handleTakeOver = async () => {
-    await patchConversation({
-      status: "pending",
-      aiState: "human_active",
-      assigneeUserId: currentUserId ?? null,
-      tags: Array.from(new Set([...(conversation.tags ?? []), "needs_human"])),
+    await runAttentionAction({
+      actionPath: `/api/conversations/${conversation._id}/pause-bot`,
+      fallbackMessage: "Failed to pause AI",
     });
   };
 
   const handleReturnToBot = async () => {
-    await patchConversation({
-      status: "open",
-      aiState: "idle",
-      assigneeUserId: null,
-      tags: (conversation.tags ?? []).filter((tag) => tag !== "needs_human"),
+    await runAttentionAction({
+      actionPath: `/api/conversations/${conversation._id}/resume-bot`,
+      fallbackMessage: "Failed to return conversation to bot",
     });
   };
 
   const handleRequestHuman = async () => {
-    await patchConversation({
-      status: "pending",
-      aiState: "human_requested",
-      tags: Array.from(new Set([...(conversation.tags ?? []), "needs_human"])),
+    await runAttentionAction({
+      actionPath: `/api/conversations/${conversation._id}/request-human`,
+      fallbackMessage: "Failed to hand off to staff",
     });
   };
 
@@ -389,56 +457,32 @@ export function ContactPanel(props: {
   };
 
   const canReturnToBot =
-    (aiState === "human_active" ||
-      aiState === "human_requested" ||
-      aiState === "needs_human") &&
-    !isSubmitting;
-
-  const nextAction = (() => {
-    if (aiState === "human_active") {
+    (handlingState === "paused" || handlingState === "expired") && !isSubmitting;
+  const primaryAction = (() => {
+    if (handlingState === "paused" || handlingState === "expired") {
       return {
-        label: isSubmitting ? "Updating..." : "Resume Bot",
-        icon: (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.8}
-            className="h-3.5 w-3.5"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 7H5v4" />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M5 11a7 7 0 1 0 2.05-4.95L5 7"
-            />
-          </svg>
-        ),
-        variant: "secondary" as const,
-        onClick: handleReturnToBot,
-        disabled: !canReturnToBot,
+        label: isSubmitting ? "Updating..." : "Extend 1h",
+        icon: <ScheduleRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />,
+        variant: "primary" as const,
+        onClick: handleTakeOver,
+        disabled: isSubmitting,
       };
     }
 
-    if (aiState === "needs_human" || aiState === "human_requested") {
+    if (handlingState === "bot") {
       return {
-        label: isSubmitting ? "Updating..." : "Take Ownership",
-        icon: (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.8}
-            className="h-3.5 w-3.5"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h16" />
-          </svg>
-        ),
+        label: isSubmitting ? "Updating..." : "Pause 1h",
+        icon: <ScheduleRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />,
+        variant: "primary" as const,
+        onClick: handleTakeOver,
+        disabled: isSubmitting,
+      };
+    }
+
+    if (handlingState === "pending_human") {
+      return {
+        label: isSubmitting ? "Updating..." : "Pause 1h",
+        icon: <ScheduleRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />,
         variant: "primary" as const,
         onClick: handleTakeOver,
         disabled: isSubmitting,
@@ -446,27 +490,31 @@ export function ContactPanel(props: {
     }
 
     return {
-      label: isSubmitting ? "Updating..." : "Request Staff Review",
-      icon: (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.8}
-          className="h-3.5 w-3.5"
-          aria-hidden="true"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v9" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 9.5 3.5 3.5 3.5-3.5" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 19h14" />
-        </svg>
-      ),
+      label: isSubmitting ? "Updating..." : "Hand Off",
+      icon: <SupportAgentRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />,
       variant: "danger" as const,
       onClick: handleRequestHuman,
       disabled: isSubmitting,
     };
   })();
+  const secondaryAction =
+    handlingState === "paused" || handlingState === "expired"
+      ? {
+          label: isSubmitting ? "Updating..." : "Resume",
+          icon: <AutorenewRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />,
+          variant: "secondary" as const,
+          onClick: handleReturnToBot,
+          disabled: !canReturnToBot,
+        }
+      : handlingState === "bot"
+        ? {
+          label: isSubmitting ? "Updating..." : "Hand Off",
+          icon: <SupportAgentRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />,
+            variant: "danger" as const,
+            onClick: handleRequestHuman,
+            disabled: isSubmitting,
+          }
+      : null;
 
   const canSaveProfile = !!contact?._id && !isSavingProfile;
 
@@ -531,24 +579,33 @@ export function ContactPanel(props: {
       <InfoBlock label="Chat Control">
         <div className="space-y-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <Pill>{humanReadableAIState[aiState] ?? aiState}</Pill>
+            <Pill>Bot: {handlingLabel}</Pill>
             <Pill>Status: {formatConversationStatus(conversation.status)}</Pill>
-            {ownerLabel ? <Pill>Owner: {ownerLabel}</Pill> : null}
+            {assignmentLabel ? <Pill>{assignmentLabel}</Pill> : null}
             {visibleConversationTags.map((tag) => (
               <Pill key={tag}>{tag}</Pill>
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <ActionButton
-              variant={nextAction.variant}
-              onClick={nextAction.onClick}
-              disabled={nextAction.disabled}
-              title={nextAction.label}
-              iconOnly={!isSubmitting}
+              variant={primaryAction.variant}
+              onClick={primaryAction.onClick}
+              disabled={primaryAction.disabled}
+              title={primaryAction.label}
             >
-              {isSubmitting ? nextAction.label : nextAction.icon}
+              <ActionLabel icon={primaryAction.icon}>{primaryAction.label}</ActionLabel>
             </ActionButton>
+            {secondaryAction ? (
+              <ActionButton
+                variant={secondaryAction.variant}
+                onClick={secondaryAction.onClick}
+                disabled={secondaryAction.disabled}
+                title={secondaryAction.label}
+              >
+                <ActionLabel icon={secondaryAction.icon}>{secondaryAction.label}</ActionLabel>
+              </ActionButton>
+            ) : null}
           </div>
 
           {actionError ? (
@@ -582,6 +639,50 @@ export function ContactPanel(props: {
               </p>
             ) : null}
           </div>
+        </div>
+      </InfoBlock>
+
+      <InfoBlock label="Attention">
+        <div className="space-y-2.5">
+          {isLoadingAttentionItems ? (
+            <p className="text-xs text-slate-500">Loading attention history...</p>
+          ) : attentionItems.length === 0 ? (
+            <p className="text-xs text-slate-500">
+              No explicit attention items recorded for this conversation yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {attentionItems.map((item) => {
+                const openedAt = formatDateTime(item.openedAt);
+                const resolvedAt = formatDateTime(item.resolvedAt);
+                const isCurrent = item._id === currentAttentionItemId;
+
+                return (
+                  <article
+                    key={item._id}
+                    className="rounded-xl border border-slate-200 bg-white p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Pill>{humanReadableAttentionState[item.state]}</Pill>
+                      {item.needsHuman ? <Pill>Needs human</Pill> : null}
+                      {isCurrent ? <Pill>Current</Pill> : null}
+                    </div>
+
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-600">
+                      <p>{getAttentionSummary(item)}</p>
+                      <p>Inbound messages: {item.openedByInboundMessageIds.length}</p>
+                      {openedAt ? <p>Opened: {openedAt}</p> : null}
+                      {resolvedAt ? <p>Resolved: {resolvedAt}</p> : null}
+                      {item.botPausedUntil ? (
+                        <p>Bot pause until: {formatDateTime(item.botPausedUntil)}</p>
+                      ) : null}
+                      {item.assignedUserId ? <p>Assigned user: {item.assignedUserId}</p> : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
       </InfoBlock>
 

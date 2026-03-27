@@ -2,11 +2,11 @@ import { promises as fs } from "fs";
 import path from "path";
 import { Router } from "express";
 import { z } from "zod";
-import { env } from "../../config/env";
 import { asyncHandler } from "../../lib/async-handler";
 import { ValidationError } from "../../lib/errors";
 import { requireWorkspace } from "../../middleware/require-workspace";
 import { MediaAssetModel } from "../../models";
+import { mediaAssetService } from "../../services/media-asset.service";
 
 const router = Router();
 
@@ -32,13 +32,6 @@ const decodeBase64Payload = (value: string) => {
     mimeTypeFromDataUrl: null,
     buffer: Buffer.from(value, "base64"),
   };
-};
-
-const resolvePublicBaseUrl = () => {
-  if (env.PUBLIC_WEBHOOK_BASE_URL.trim()) {
-    return env.PUBLIC_WEBHOOK_BASE_URL.trim().replace(/\/+$/, "");
-  }
-  return `http://localhost:${env.PORT}`;
 };
 
 router.use(requireWorkspace);
@@ -81,15 +74,13 @@ router.post(
     const storedPath = path.resolve(assetsDir, storedFilename);
     await fs.writeFile(storedPath, decoded.buffer);
 
-    const publicUrl = `${resolvePublicBaseUrl()}/assets/${storedFilename}`;
     asset.storagePath = storedPath;
-    asset.publicUrl = publicUrl;
     await asset.save();
 
     res.status(201).json({
       asset: {
         _id: String(asset._id),
-        url: asset.publicUrl,
+        url: mediaAssetService.createSignedContentUrl(String(asset._id)),
         mimeType: asset.mimeType,
         size: asset.size,
         fileName: asset.originalFilename,

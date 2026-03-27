@@ -4,9 +4,18 @@ import {
   BusinessHoursModel,
 } from "../models";
 import { CanonicalMessage } from "../channels/types";
+import {
+  BOT_ACTIVE_ROUTING_STATE,
+  HUMAN_ACTIVE_ROUTING_STATE,
+  HUMAN_PENDING_ROUTING_STATE,
+  isHumanActiveRoutingState,
+} from "../lib/conversation-ai-state";
 import { emitRealtimeEvent } from "../lib/realtime";
+import { isBotPauseBlockingAutomation, serializeBotPause } from "../lib/bot-pause";
 import { aiReplyService } from "./ai-reply.service";
+import { attentionItemService } from "./attention-item.service";
 import { auditLogService } from "./audit-log.service";
+import { billingService } from "./billing.service";
 import { conversationService } from "./conversation.service";
 import { contactService } from "./contact.service";
 import { messageService } from "./message.service";
@@ -52,6 +61,29 @@ const DEFAULT_FALLBACK_MESSAGE =
   "Thanks for your message. A teammate will follow up soon.";
 
 class AutomationService {
+  private getNeedsHumanReason(params: {
+    suggestionKind: string;
+    isOutsideBusinessHours: boolean;
+  }) {
+    if (params.isOutsideBusinessHours) {
+      return "after_hours" as const;
+    }
+
+    if (params.suggestionKind === "low_confidence") {
+      return "low_confidence" as const;
+    }
+
+    if (params.suggestionKind === "review" || params.suggestionKind === "requires_human") {
+      return "manual_request" as const;
+    }
+
+    if (params.suggestionKind === "unsupported") {
+      return "other" as const;
+    }
+
+    return "other" as const;
+  }
+
   private async recordSkip(params: {
     workspaceId: string;
     conversationId: string;
@@ -201,12 +233,12 @@ class AutomationService {
       meta?: Record<string, unknown>;
       createdAt: Date;
     }>;
-  }) {
+  }): Promise<{ sent: boolean; messageId: string | null }> {
     if (
       params.recentMessages &&
       this.hasRecentAgentOrAutomationReply(params.recentMessages, params.inboundOccurredAt)
     ) {
-      return false;
+      return { sent: false, messageId: null };
     }
 
     const acknowledgementText = this.buildHumanPendingText({
@@ -216,7 +248,7 @@ class AutomationService {
     });
 
     if (!acknowledgementText) {
-      return false;
+      return { sent: false, messageId: null };
     }
 
     const replyOccurredAt = new Date(params.inboundOccurredAt.getTime() + 1000);
@@ -256,7 +288,10 @@ class AutomationService {
       },
     });
 
-    return true;
+    return {
+      sent: true,
+      messageId: finalMessage ? String(finalMessage._id) : null,
+    };
   }
 
   private async sendAfterHoursFallback(params: {
@@ -267,10 +302,10 @@ class AutomationService {
     inboundOccurredAt: Date;
     confidence: number;
     sourceHints: string[];
-  }) {
+  }): Promise<{ sent: boolean; messageId: string | null }> {
     const fallbackText = params.fallbackText?.trim();
     if (!fallbackText) {
-      return false;
+      return { sent: false, messageId: null };
     }
 
     const replyOccurredAt = new Date(params.inboundOccurredAt.getTime() + 1000);
@@ -309,7 +344,10 @@ class AutomationService {
       },
     });
 
-    return true;
+    return {
+      sent: true,
+      messageId: finalMessage ? String(finalMessage._id) : null,
+    };
   }
 
   private async createReviewNote(params: {
@@ -363,6 +401,7 @@ class AutomationService {
     workspaceId: string;
     conversationId: string;
     message: CanonicalMessage;
+    attentionItemId?: string;
   }) {
     if (
       params.message.direction !== "inbound" ||
@@ -380,7 +419,7 @@ class AutomationService {
       return;
     }
 
-    const [aiSettings, businessHours, afterHoursRule, conversation] =
+    const [aiSettings, businessHours, afterHoursRule, conversation, billingState] =
       await Promise.all([
         AISettingsModel.findOne({ workspaceId: params.workspaceId }),
         BusinessHoursModel.findOne({ workspaceId: params.workspaceId }),
@@ -390,6 +429,7 @@ class AutomationService {
           isActive: true,
         }),
         conversationService.getById(params.conversationId),
+        billingService.getWorkspaceBillingState(params.workspaceId),
       ]);
 
     if (!conversation || !conversation.aiEnabled) {
@@ -413,6 +453,32 @@ class AutomationService {
       aiSettings?.autoReplyMode || (effectiveAutoReplyEnabled ? "all" : "none");
     const effectiveFallbackRepliesEnabled = aiSettings?.afterHoursEnabled ?? true;
     const effectiveConfidenceThreshold = aiSettings?.confidenceThreshold ?? 0.7;
+
+    if (!billingState.resolvedEntitlements.allowAutomation) {
+      await this.recordSkip({
+        workspaceId: params.workspaceId,
+        conversationId: params.conversationId,
+        reason: "Workspace automation is not enabled for the current billing plan",
+        data: {
+          allowAutomation: false,
+          allowBYOAI: billingState.resolvedEntitlements.allowBYOAI,
+        },
+      });
+      return;
+    }
+
+    if (!billingState.resolvedEntitlements.allowBYOAI) {
+      await this.recordSkip({
+        workspaceId: params.workspaceId,
+        conversationId: params.conversationId,
+        reason: "Workspace BYO AI is not enabled for the current billing plan",
+        data: {
+          allowAutomation: billingState.resolvedEntitlements.allowAutomation,
+          allowBYOAI: false,
+        },
+      });
+      return;
+    }
 
     if (!effectiveEnabled || !effectiveAutoReplyEnabled) {
       await this.recordSkip({
@@ -465,17 +531,13 @@ class AutomationService {
       return;
     }
 
-    if (
-      conversation.aiState === "needs_human" ||
-      conversation.aiState === "human_requested" ||
-      conversation.aiState === "human_active"
-    ) {
+    if (isBotPauseBlockingAutomation(conversation)) {
       const recentMessages = await messageService.listRecentCanonicalByConversation(
         params.conversationId,
         12
       );
 
-      const pendingAckSent = await this.sendHumanPendingAcknowledgement({
+      const pendingAckResult = await this.sendHumanPendingAcknowledgement({
         workspaceId: params.workspaceId,
         conversationId: params.conversationId,
         fallbackText: aiSettings?.fallbackMessage,
@@ -487,13 +549,81 @@ class AutomationService {
         recentMessages,
       });
 
+      if (params.attentionItemId) {
+        await attentionItemService.markAwaitingHuman({
+          attentionItemId: params.attentionItemId,
+          needsHumanReason: "manual_request",
+          acknowledgementMessageId: pendingAckResult.messageId,
+          routingState: HUMAN_ACTIVE_ROUTING_STATE,
+          assignedUserId: conversation.assigneeUserId
+            ? String(conversation.assigneeUserId)
+            : null,
+          botPausedAt: conversation.botPausedAt ?? null,
+          botPausedUntil: conversation.botPausedUntil ?? null,
+          botPausedByUserId: conversation.botPausedByUserId
+            ? String(conversation.botPausedByUserId)
+            : null,
+        });
+      }
+
       await this.recordSkip({
         workspaceId: params.workspaceId,
         conversationId: params.conversationId,
-        reason: "Conversation is in human-handoff state",
+        reason: "Conversation bot pause is active or expired",
         data: {
-          aiState: conversation.aiState,
-          pendingAckSent,
+          routingState: conversation.routingState,
+          pendingAckSent: pendingAckResult.sent,
+          ...serializeBotPause(conversation),
+        },
+      });
+      return;
+    }
+
+    if (isHumanActiveRoutingState(conversation.routingState)) {
+      const recentMessages = await messageService.listRecentCanonicalByConversation(
+        params.conversationId,
+        12
+      );
+
+      const pendingAckResult = await this.sendHumanPendingAcknowledgement({
+        workspaceId: params.workspaceId,
+        conversationId: params.conversationId,
+        fallbackText: aiSettings?.fallbackMessage,
+        inboundOccurredAt,
+        confidence: 0.4,
+        sourceHints: [],
+        message: params.message,
+        isOutsideBusinessHours,
+        recentMessages,
+      });
+
+      if (params.attentionItemId) {
+        await attentionItemService.markAwaitingHuman({
+          attentionItemId: params.attentionItemId,
+          needsHumanReason: "other",
+          acknowledgementMessageId: pendingAckResult.messageId,
+          routingState:
+            conversation.routingState === HUMAN_ACTIVE_ROUTING_STATE
+              ? HUMAN_ACTIVE_ROUTING_STATE
+              : HUMAN_PENDING_ROUTING_STATE,
+          assignedUserId: conversation.assigneeUserId
+            ? String(conversation.assigneeUserId)
+            : null,
+          botPausedAt: conversation.botPausedAt ?? null,
+          botPausedUntil: conversation.botPausedUntil ?? null,
+          botPausedByUserId: conversation.botPausedByUserId
+            ? String(conversation.botPausedByUserId)
+            : null,
+        });
+      }
+
+      await this.recordSkip({
+        workspaceId: params.workspaceId,
+        conversationId: params.conversationId,
+        reason: "Conversation is actively owned by a human",
+        data: {
+          routingState: conversation.routingState,
+          pendingAckSent: pendingAckResult.sent,
         },
       });
       return;
@@ -588,31 +718,31 @@ class AutomationService {
     });
 
     if (suggestion.kind === "review") {
-      const fallbackSent =
-        shouldSendRuleFallback &&
-        (await this.sendAfterHoursFallback({
-          workspaceId: params.workspaceId,
-          conversationId: params.conversationId,
-          ruleId: afterHoursRuleId,
-          fallbackText: afterHoursFallbackText,
-          inboundOccurredAt,
-          confidence: suggestion.confidence,
-          sourceHints: suggestion.sourceHints,
-        }));
-      const pendingAckSent =
-        !fallbackSent &&
-        (await this.sendHumanPendingAcknowledgement({
-          workspaceId: params.workspaceId,
-          conversationId: params.conversationId,
-          ruleId: afterHoursRuleId,
-          fallbackText: aiSettings?.fallbackMessage,
-          inboundOccurredAt,
-          confidence: suggestion.confidence,
-          sourceHints: suggestion.sourceHints,
-          message: params.message,
-          isOutsideBusinessHours,
-          recentMessages,
-        }));
+      const fallbackResult = shouldSendRuleFallback
+        ? await this.sendAfterHoursFallback({
+            workspaceId: params.workspaceId,
+            conversationId: params.conversationId,
+            ruleId: afterHoursRuleId,
+            fallbackText: afterHoursFallbackText,
+            inboundOccurredAt,
+            confidence: suggestion.confidence,
+            sourceHints: suggestion.sourceHints,
+          })
+        : { sent: false, messageId: null };
+      const pendingAckResult = !fallbackResult.sent
+        ? await this.sendHumanPendingAcknowledgement({
+            workspaceId: params.workspaceId,
+            conversationId: params.conversationId,
+            ruleId: afterHoursRuleId,
+            fallbackText: aiSettings?.fallbackMessage,
+            inboundOccurredAt,
+            confidence: suggestion.confidence,
+            sourceHints: suggestion.sourceHints,
+            message: params.message,
+            isOutsideBusinessHours,
+            recentMessages,
+          })
+        : { sent: false, messageId: null };
 
       const draftMessages = this.extractDraftMessages(suggestion.blocks);
       const reviewNote = await this.createReviewNote({
@@ -626,20 +756,30 @@ class AutomationService {
         sourceHints: suggestion.sourceHints,
         internalNote: suggestion.internalNote,
         draftMessages,
-        customerAcknowledged: fallbackSent || pendingAckSent,
+        customerAcknowledged: fallbackResult.sent || !!pendingAckResult?.sent,
         occurredAt: new Date(
-          inboundOccurredAt.getTime() + (fallbackSent || pendingAckSent ? 2000 : 1000)
+          inboundOccurredAt.getTime() + (fallbackResult.sent || pendingAckResult?.sent ? 2000 : 1000)
         ),
       });
 
-      const handoffConversation = await conversationService.requestHumanHandoff(
-        params.conversationId
-      );
+      if (params.attentionItemId) {
+        await attentionItemService.markAwaitingHuman({
+          attentionItemId: params.attentionItemId,
+          needsHumanReason: this.getNeedsHumanReason({
+            suggestionKind: suggestion.kind,
+            isOutsideBusinessHours,
+          }),
+          acknowledgementMessageId:
+            fallbackResult.messageId ?? pendingAckResult?.messageId ?? null,
+        });
+      } else {
+        await conversationService.requestHumanHandoff(params.conversationId);
+      }
 
       emitRealtimeEvent("conversation.updated", {
         workspaceId: params.workspaceId,
         conversationId: params.conversationId,
-        status: handoffConversation?.status ?? conversation.status,
+        status: "pending",
       });
 
       await auditLogService.record({
@@ -654,8 +794,8 @@ class AutomationService {
         data: {
           draftMessages,
           internalNote: suggestion.internalNote,
-          fallbackSent,
-          pendingAckSent,
+          fallbackSent: fallbackResult.sent,
+          pendingAckSent: pendingAckResult?.sent ?? false,
           messageKind: params.message.kind,
           ruleId: afterHoursRuleId,
           outsideBusinessHours: isOutsideBusinessHours,
@@ -670,45 +810,51 @@ class AutomationService {
       suggestion.kind === "low_confidence" ||
       suggestion.confidence < effectiveConfidenceThreshold
     ) {
-      const fallbackSent =
-        shouldSendRuleFallback &&
-        (await this.sendAfterHoursFallback({
-          workspaceId: params.workspaceId,
-          conversationId: params.conversationId,
-          ruleId: afterHoursRuleId,
-          fallbackText: afterHoursFallbackText,
-          inboundOccurredAt,
-          confidence: suggestion.confidence,
-          sourceHints: suggestion.sourceHints,
-        }));
+      const fallbackResult = shouldSendRuleFallback
+        ? await this.sendAfterHoursFallback({
+            workspaceId: params.workspaceId,
+            conversationId: params.conversationId,
+            ruleId: afterHoursRuleId,
+            fallbackText: afterHoursFallbackText,
+            inboundOccurredAt,
+            confidence: suggestion.confidence,
+            sourceHints: suggestion.sourceHints,
+          })
+        : { sent: false, messageId: null };
 
-      const pendingAckSent =
-        !fallbackSent &&
-        (await this.sendHumanPendingAcknowledgement({
-          workspaceId: params.workspaceId,
-          conversationId: params.conversationId,
-          ruleId: afterHoursRuleId,
-          fallbackText: aiSettings?.fallbackMessage,
-          inboundOccurredAt,
-          confidence: suggestion.confidence,
-          sourceHints: suggestion.sourceHints,
-          message: params.message,
-          isOutsideBusinessHours,
-          recentMessages,
-        }));
+      const pendingAckResult = !fallbackResult.sent
+        ? await this.sendHumanPendingAcknowledgement({
+            workspaceId: params.workspaceId,
+            conversationId: params.conversationId,
+            ruleId: afterHoursRuleId,
+            fallbackText: aiSettings?.fallbackMessage,
+            inboundOccurredAt,
+            confidence: suggestion.confidence,
+            sourceHints: suggestion.sourceHints,
+            message: params.message,
+            isOutsideBusinessHours,
+            recentMessages,
+          })
+        : { sent: false, messageId: null };
 
-      if (fallbackSent) {
-        return;
+      if (params.attentionItemId) {
+        await attentionItemService.markAwaitingHuman({
+          attentionItemId: params.attentionItemId,
+          needsHumanReason: this.getNeedsHumanReason({
+            suggestionKind: suggestion.kind,
+            isOutsideBusinessHours,
+          }),
+          acknowledgementMessageId:
+            fallbackResult.messageId ?? pendingAckResult?.messageId ?? null,
+        });
+      } else {
+        await conversationService.requestHumanHandoff(params.conversationId);
       }
-
-      const handoffConversation = await conversationService.requestHumanHandoff(
-        params.conversationId
-      );
 
       emitRealtimeEvent("conversation.updated", {
         workspaceId: params.workspaceId,
         conversationId: params.conversationId,
-        status: handoffConversation?.status ?? conversation.status,
+        status: "pending",
       });
 
       await auditLogService.record({
@@ -723,7 +869,8 @@ class AutomationService {
           messageKind: params.message.kind,
           ruleId: afterHoursRuleId,
           outsideBusinessHours: isOutsideBusinessHours,
-          pendingAckSent,
+          pendingAckSent: pendingAckResult?.sent ?? false,
+          fallbackSent: fallbackResult.sent,
           internalNote:
             "internalNote" in suggestion ? suggestion.internalNote || undefined : undefined,
           escalationReason:
@@ -752,7 +899,17 @@ class AutomationService {
     });
     const finalMessage = result.messages[result.messages.length - 1];
 
-    await conversationService.setAIState(params.conversationId, "auto_replied");
+    if (params.attentionItemId && finalMessage) {
+      await attentionItemService.markBotReply({
+        attentionItemId: params.attentionItemId,
+        messageId: String(finalMessage._id),
+      });
+    } else {
+      await conversationService.setRoutingState(
+        params.conversationId,
+        BOT_ACTIVE_ROUTING_STATE
+      );
+    }
 
     await auditLogService.record({
       workspaceId: params.workspaceId,

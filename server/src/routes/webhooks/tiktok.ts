@@ -7,7 +7,7 @@ const router = Router();
 router.post(
   "/",
   asyncHandler(async (req, res) => {
-    const result = await inboundWebhookService.handle({
+    const result = await inboundWebhookService.receive({
       channel: "tiktok",
       body: req.body,
       rawBody: (req as Request & { rawBody?: string }).rawBody,
@@ -17,6 +17,8 @@ router.post(
 
     res.status(200).json({
       processed: result.processed.length,
+      duplicate: result.duplicate,
+      queued: result.queued,
     });
   })
 );

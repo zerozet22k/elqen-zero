@@ -39,6 +39,12 @@ export class ConflictError extends AppError {
   }
 }
 
+export class TooManyRequestsError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super(429, "TOO_MANY_REQUESTS", message, details);
+  }
+}
+
 export class CapabilityError extends AppError {
   constructor(message: string, details?: unknown) {
     super(422, "CHANNEL_CAPABILITY_BLOCKED", message, details);

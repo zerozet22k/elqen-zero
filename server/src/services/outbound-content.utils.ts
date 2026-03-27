@@ -7,9 +7,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const normalizeChannel = (value: unknown): CanonicalChannel | "any" => {
   if (
     value === "facebook" ||
+    value === "instagram" ||
     value === "telegram" ||
     value === "viber" ||
-    value === "tiktok"
+    value === "tiktok" ||
+    value === "line" ||
+    value === "website"
   ) {
     return value;
   }
@@ -127,6 +130,12 @@ function normalizeStoredOutboundBlock(value: unknown): OutboundContentBlock | nu
       channel,
       sticker: {
         platformStickerId,
+        packageId:
+          typeof sticker?.packageId === "string" ? sticker.packageId.trim() || undefined : undefined,
+        stickerResourceType:
+          typeof sticker?.stickerResourceType === "string"
+            ? sticker.stickerResourceType.trim() || undefined
+            : undefined,
         label: typeof sticker?.label === "string" ? sticker.label : undefined,
         description:
           typeof sticker?.description === "string" ? sticker.description : undefined,

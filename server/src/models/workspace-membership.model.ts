@@ -1,10 +1,17 @@
 import { InferSchemaType, HydratedDocument, Schema, model } from "mongoose";
 
-export const WORKSPACE_MEMBER_ROLES = ["owner", "admin", "staff"] as const;
+export const WORKSPACE_MEMBER_PUBLIC_ROLES = [
+  "owner",
+  "admin",
+  "manager",
+  "agent",
+  "viewer",
+] as const;
 export const WORKSPACE_MEMBER_STATUSES = [
   "active",
   "invited",
   "disabled",
+  "inactive_due_to_plan_limit",
 ] as const;
 
 const workspaceMembershipSchema = new Schema(
@@ -21,9 +28,9 @@ const workspaceMembershipSchema = new Schema(
     },
     role: {
       type: String,
-      enum: WORKSPACE_MEMBER_ROLES,
+      enum: WORKSPACE_MEMBER_PUBLIC_ROLES,
       required: true,
-      default: "staff",
+      default: "agent",
     },
     status: {
       type: String,

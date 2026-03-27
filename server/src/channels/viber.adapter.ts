@@ -1,6 +1,7 @@
 import axios from "axios";
 import { BaseChannelAdapter } from "./base.adapter";
-import { CanonicalMessage, ChannelCapabilities } from "./types";
+import { CanonicalMedia, CanonicalMessage, ChannelCapabilities } from "./types";
+import { mediaAssetService } from "../services/media-asset.service";
 
 const VIBER_INBOUND_MEDIA_TTL_MS = 60 * 60 * 1000;
 
@@ -65,6 +66,17 @@ type ViberPayload = {
 
 export class ViberAdapter extends BaseChannelAdapter {
   channel = "viber" as const;
+
+  private resolveOutboundMediaUrl(media?: CanonicalMedia) {
+    const storedAssetId = String(media?.storedAssetId ?? "").trim();
+    if (storedAssetId) {
+      return mediaAssetService.createSignedContentUrl(storedAssetId, {
+        absolute: true,
+      });
+    }
+
+    return media?.storedAssetUrl ?? media?.url;
+  }
 
   async verifyWebhook(input: {
     rawBody?: string;
@@ -313,18 +325,20 @@ export class ViberAdapter extends BaseChannelAdapter {
     };
 
     if (input.message.kind === "image") {
+      const mediaUrl = this.resolveOutboundMediaUrl(input.message.media?.[0]);
       request = {
         receiver: input.conversation.externalChatId,
         type: "picture",
-        text: input.message.text?.body,
-        media: input.message.media?.[0]?.storedAssetUrl ?? input.message.media?.[0]?.url,
+        text: input.message.text?.body ?? "",
+        media: mediaUrl,
+        thumbnail: input.message.media?.[0]?.thumbnailUrl ?? mediaUrl,
       };
     } else if (input.message.kind === "video") {
       request = {
         receiver: input.conversation.externalChatId,
         type: "video",
         text: input.message.text?.body,
-        media: input.message.media?.[0]?.storedAssetUrl ?? input.message.media?.[0]?.url,
+        media: this.resolveOutboundMediaUrl(input.message.media?.[0]),
         size: input.message.media?.[0]?.size,
         duration: input.message.media?.[0]?.durationMs
           ? Math.round(input.message.media[0].durationMs / 1000)
@@ -335,7 +349,7 @@ export class ViberAdapter extends BaseChannelAdapter {
       request = {
         receiver: input.conversation.externalChatId,
         type: "file",
-        media: input.message.media?.[0]?.storedAssetUrl ?? input.message.media?.[0]?.url,
+        media: this.resolveOutboundMediaUrl(input.message.media?.[0]),
         size: input.message.media?.[0]?.size,
         file_name: input.message.media?.[0]?.filename,
       };
@@ -371,8 +385,7 @@ export class ViberAdapter extends BaseChannelAdapter {
           media:
             input.message.interactive?.value ??
             input.message.text?.body ??
-            input.message.media?.[0]?.storedAssetUrl ??
-            input.message.media?.[0]?.url,
+            this.resolveOutboundMediaUrl(input.message.media?.[0]),
         };
       }
     } else if (input.message.kind === "sticker") {

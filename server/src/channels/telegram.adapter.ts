@@ -1,6 +1,8 @@
+import { promises as fs } from "fs";
 import axios from "axios";
 import { BaseChannelAdapter } from "./base.adapter";
-import { CanonicalMessage, ChannelCapabilities } from "./types";
+import { CanonicalMedia, CanonicalMessage, ChannelCapabilities } from "./types";
+import { MediaAssetModel } from "../models";
 
 const GIF_URL_REGEX = /https?:\/\/[^\s]+\.gif(?:\?[^\s]*)?/gi;
 
@@ -145,6 +147,100 @@ type TelegramUpdate = {
 
 export class TelegramAdapter extends BaseChannelAdapter {
   channel = "telegram" as const;
+
+  private async resolveStoredAssetUpload(media?: CanonicalMedia) {
+    const storedAssetId = String(media?.storedAssetId ?? "").trim();
+    if (!storedAssetId) {
+      return null;
+    }
+
+    const asset = await MediaAssetModel.findById(storedAssetId).lean();
+    if (!asset?.storagePath) {
+      return null;
+    }
+
+    const buffer = await fs.readFile(asset.storagePath);
+    return {
+      buffer,
+      filename:
+        String(media?.filename ?? "").trim() ||
+        String(asset.originalFilename ?? "").trim() ||
+        "upload.bin",
+      mimeType:
+        String(media?.mimeType ?? "").trim() ||
+        String(asset.mimeType ?? "").trim() ||
+        "application/octet-stream",
+    };
+  }
+
+  private async sendMultipartMedia(params: {
+    botToken: string;
+    endpoint: string;
+    fileField: string;
+    file: {
+      buffer: Buffer;
+      filename: string;
+      mimeType: string;
+    };
+    fields: Record<string, string | number | undefined>;
+  }) {
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(params.fields)) {
+      if (value !== undefined && value !== null && value !== "") {
+        formData.append(key, String(value));
+      }
+    }
+
+    formData.append(
+      params.fileField,
+      new Blob([Uint8Array.from(params.file.buffer)], {
+        type: params.file.mimeType,
+      }),
+      params.file.filename
+    );
+
+    const request = {
+      ...params.fields,
+      [params.fileField]: params.file.filename,
+    };
+
+    try {
+      const response = await fetch(
+        `https://api.telegram.org/bot${params.botToken}/${params.endpoint}`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+      const data = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            description?: string;
+            result?: { message_id?: number | string };
+          }
+        | null;
+
+      if (!response.ok || data?.ok === false) {
+        return {
+          status: "failed" as const,
+          error:
+            data?.description ||
+            `Telegram ${params.endpoint} failed with HTTP ${response.status}`,
+          raw: data,
+          request,
+        };
+      }
+
+      return {
+        externalMessageId: String(data?.result?.message_id ?? ""),
+        status: "sent" as const,
+        raw: data,
+        request,
+      };
+    } catch (error) {
+      return this.buildFailedSendResult(error, request);
+    }
+  }
 
   private isGifLikeMedia(message: CanonicalMessage) {
     const media = message.media?.[0];
@@ -568,6 +664,9 @@ export class TelegramAdapter extends BaseChannelAdapter {
 
     const media = input.message.media?.[0];
     const mediaUrl = media?.storedAssetUrl ?? media?.url;
+    const storedAssetUpload = media
+      ? await this.resolveStoredAssetUpload(media)
+      : null;
 
     let request: unknown;
     let endpoint = "sendMessage";
@@ -588,6 +687,19 @@ export class TelegramAdapter extends BaseChannelAdapter {
       }
 
       if (outboundMedia.length === 1 && this.isGifLikeMedia(input.message)) {
+        if (storedAssetUpload) {
+          return this.sendMultipartMedia({
+            botToken,
+            endpoint: "sendAnimation",
+            fileField: "animation",
+            file: storedAssetUpload,
+            fields: {
+              chat_id: input.conversation.externalChatId,
+              caption: input.message.text?.body,
+            },
+          });
+        }
+
         if (!mediaUrl) {
           return {
             status: "failed" as const,
@@ -621,6 +733,19 @@ export class TelegramAdapter extends BaseChannelAdapter {
           media: mediaGroup,
         };
       } else {
+        if (storedAssetUpload) {
+          return this.sendMultipartMedia({
+            botToken,
+            endpoint: "sendPhoto",
+            fileField: "photo",
+            file: storedAssetUpload,
+            fields: {
+              chat_id: input.conversation.externalChatId,
+              caption: input.message.text?.body,
+            },
+          });
+        }
+
         if (!mediaUrl) {
           return {
             status: "failed" as const,
@@ -635,6 +760,19 @@ export class TelegramAdapter extends BaseChannelAdapter {
         };
       }
     } else if (input.message.kind === "video") {
+      if (storedAssetUpload) {
+        return this.sendMultipartMedia({
+          botToken,
+          endpoint: "sendVideo",
+          fileField: "video",
+          file: storedAssetUpload,
+          fields: {
+            chat_id: input.conversation.externalChatId,
+            caption: input.message.text?.body,
+          },
+        });
+      }
+
       if (!mediaUrl) {
         return {
           status: "failed" as const,
@@ -648,6 +786,19 @@ export class TelegramAdapter extends BaseChannelAdapter {
         caption: input.message.text?.body,
       };
     } else if (input.message.kind === "audio") {
+      if (storedAssetUpload) {
+        return this.sendMultipartMedia({
+          botToken,
+          endpoint: "sendAudio",
+          fileField: "audio",
+          file: storedAssetUpload,
+          fields: {
+            chat_id: input.conversation.externalChatId,
+            caption: input.message.text?.body,
+          },
+        });
+      }
+
       if (!mediaUrl) {
         return {
           status: "failed" as const,
@@ -661,6 +812,19 @@ export class TelegramAdapter extends BaseChannelAdapter {
         caption: input.message.text?.body,
       };
     } else if (input.message.kind === "file") {
+      if (storedAssetUpload) {
+        return this.sendMultipartMedia({
+          botToken,
+          endpoint: "sendDocument",
+          fileField: "document",
+          file: storedAssetUpload,
+          fields: {
+            chat_id: input.conversation.externalChatId,
+            caption: input.message.text?.body,
+          },
+        });
+      }
+
       if (!mediaUrl) {
         return {
           status: "failed" as const,

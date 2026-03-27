@@ -7,6 +7,7 @@ import { asyncHandler } from "../../lib/async-handler";
 import { updateAutomationsSchema } from "../../lib/validators";
 import { requireWorkspace } from "../../middleware/require-workspace";
 import { requireRole } from "../../middleware/require-role";
+import { billingService } from "../../services/billing.service";
 
 const router = Router();
 router.use(requireWorkspace);
@@ -32,12 +33,16 @@ router.get(
 
 router.patch(
   "/",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const payload = updateAutomationsSchema.parse({
       ...req.body,
       workspaceId: String(req.workspace?._id ?? ""),
     });
+
+    if (payload.afterHoursRule && payload.afterHoursRule.isActive) {
+      await billingService.assertCanUseAutomation(payload.workspaceId);
+    }
 
     const [businessHours, afterHoursRule] = await Promise.all([
       payload.businessHours

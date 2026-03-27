@@ -33,7 +33,7 @@ class EmailService {
     workspaceName: string;
     inviterName?: string | null;
     inviteUrl: string;
-    role: string;
+    workspaceRoleLabel: string;
   }) {
     const transport = this.getTransport();
     if (!transport) {
@@ -55,7 +55,7 @@ class EmailService {
       text: [
         `Hello ${greetingName},`,
         "",
-        `${inviter} invited you to join ${params.workspaceName} as ${params.role}.`,
+        `${inviter} invited you to join ${params.workspaceName} as ${params.workspaceRoleLabel}.`,
         "",
         "Use this link to accept the invitation and set your password:",
         params.inviteUrl,
@@ -65,7 +65,7 @@ class EmailService {
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
           <p>Hello ${greetingName},</p>
-          <p>${inviter} invited you to join <strong>${params.workspaceName}</strong> as <strong>${params.role}</strong>.</p>
+          <p>${inviter} invited you to join <strong>${params.workspaceName}</strong> as <strong>${params.workspaceRoleLabel}</strong>.</p>
           <p>
             <a href="${params.inviteUrl}" style="display: inline-block; background: #0f172a; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 10px;">
               Accept invitation

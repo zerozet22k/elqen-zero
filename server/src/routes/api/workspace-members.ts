@@ -2,15 +2,18 @@ import { Router } from "express";
 import { z } from "zod";
 import {
   ConflictError,
-  ForbiddenError,
   NotFoundError,
   ValidationError,
 } from "../../lib/errors";
 import { asyncHandler } from "../../lib/async-handler";
+import {
+  ASSIGNABLE_WORKSPACE_ROLES,
+  formatWorkspaceRoleLabel,
+  serializeWorkspaceRole,
+} from "../../lib/workspace-role";
 import { requireWorkspace } from "../../middleware/require-workspace";
 import { requireRole } from "../../middleware/require-role";
 import {
-  WORKSPACE_MEMBER_ROLES,
   UserModel,
   WorkspaceMembershipDocument,
   WorkspaceMembershipModel,
@@ -18,17 +21,19 @@ import {
 } from "../../models";
 import { workspaceInviteService } from "../../services/workspace-invite.service";
 import { emailService } from "../../services/email.service";
+import { billingService } from "../../services/billing.service";
+import { invalidatePortalDashboardCache } from "../../lib/portal-dashboard-cache";
 
 const router = Router();
 
 const createMemberSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).optional(),
-  role: z.enum(["admin", "staff"]).default("staff"),
+  workspaceRole: z.enum(ASSIGNABLE_WORKSPACE_ROLES).default("agent"),
 });
 
 const updateMemberSchema = z.object({
-  role: z.enum(WORKSPACE_MEMBER_ROLES).optional(),
+  workspaceRole: z.enum(ASSIGNABLE_WORKSPACE_ROLES).optional(),
   status: z.enum(["active", "invited", "disabled"]).optional(),
 });
 
@@ -40,13 +45,20 @@ const memberParamSchema = z.object({
   memberId: z.string().min(1),
 });
 
-const serializeMembershipWithUser = async (membership: WorkspaceMembershipDocument) => {
+const serializeMembershipWithUser = async (
+  membership: WorkspaceMembershipDocument,
+  founderUserId?: string | null
+) => {
   const user = await UserModel.findById(membership.userId);
+  const isWorkspaceOwnerAccount =
+    !!founderUserId && founderUserId === String(membership.userId);
 
   return {
     _id: String(membership._id),
     workspaceId: String(membership.workspaceId),
-    role: membership.role,
+    workspaceRole: isWorkspaceOwnerAccount
+      ? "owner"
+      : serializeWorkspaceRole(membership.role),
     status: membership.status,
     invitedByUserId: membership.invitedByUserId
       ? String(membership.invitedByUserId)
@@ -55,6 +67,7 @@ const serializeMembershipWithUser = async (membership: WorkspaceMembershipDocume
     inviteExpiresAt: membership.inviteExpiresAt ?? null,
     inviteEmailSentAt: membership.inviteEmailSentAt ?? null,
     inviteAcceptedAt: membership.inviteAcceptedAt ?? null,
+    isWorkspaceOwnerAccount,
     user: user
       ? {
           _id: String(user._id),
@@ -89,7 +102,7 @@ const issueWorkspaceInvite = async (params: {
     workspaceName: params.workspaceName,
     inviterName: params.inviterName,
     inviteUrl,
-    role: params.membership.role,
+    workspaceRoleLabel: formatWorkspaceRoleLabel(params.membership.role),
   });
 
   params.membership.inviteEmailSentAt = emailResult.sent ? new Date() : null;
@@ -107,12 +120,18 @@ router.use("/:workspaceId/members", requireWorkspace);
 
 router.get(
   "/:workspaceId/members",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     workspaceParamSchema.parse(req.params);
-    const memberships = await WorkspaceMembershipModel.find({
-      workspaceId: req.workspace?._id,
-    }).sort({ createdAt: 1 });
+    const founderUserId = req.workspace?.createdByUserId
+      ? String(req.workspace.createdByUserId)
+      : null;
+    const [memberships, billing] = await Promise.all([
+      WorkspaceMembershipModel.find({
+        workspaceId: req.workspace?._id,
+      }).sort({ createdAt: 1 }),
+      billingService.getWorkspaceBillingState(String(req.workspace?._id ?? "")),
+    ]);
 
     const userIds = memberships.map((membership) => membership.userId);
     const users = userIds.length ? await UserModel.find({ _id: { $in: userIds } }) : [];
@@ -121,7 +140,10 @@ router.get(
     const items = memberships.map((membership) => ({
       _id: String(membership._id),
       workspaceId: String(membership.workspaceId),
-      role: membership.role,
+      workspaceRole:
+        founderUserId && founderUserId === String(membership.userId)
+          ? "owner"
+          : serializeWorkspaceRole(membership.role),
       status: membership.status,
       invitedByUserId: membership.invitedByUserId
         ? String(membership.invitedByUserId)
@@ -130,6 +152,8 @@ router.get(
       inviteExpiresAt: membership.inviteExpiresAt ?? null,
       inviteEmailSentAt: membership.inviteEmailSentAt ?? null,
       inviteAcceptedAt: membership.inviteAcceptedAt ?? null,
+      isWorkspaceOwnerAccount:
+        !!founderUserId && founderUserId === String(membership.userId),
       user: (() => {
         const user = userMap.get(String(membership.userId));
         return user
@@ -143,13 +167,16 @@ router.get(
       })(),
     }));
 
-    res.json({ items });
+    res.json({
+      items,
+      billing: billing.serialized,
+    });
   })
 );
 
 router.post(
   "/:workspaceId/members",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     workspaceParamSchema.parse(req.params);
     const payload = createMemberSchema.parse(req.body);
@@ -165,10 +192,14 @@ router.post(
         email,
         name: payload.name?.trim() || email.split("@")[0],
         passwordHash: "!invited-account",
-        role: "staff",
         workspaceIds: [],
       });
     }
+
+    await billingService.assertCanAddSeat(
+      String(req.workspace?._id ?? ""),
+      String(user._id)
+    );
 
     const existingMembership = await WorkspaceMembershipModel.findOne({
       workspaceId: req.workspace?._id,
@@ -183,7 +214,7 @@ router.post(
     const membership = await WorkspaceMembershipModel.create({
       workspaceId: req.workspace?._id,
       userId: user._id,
-      role: payload.role,
+      role: payload.workspaceRole,
       status,
       invitedByUserId: req.auth?.userId ?? null,
       inviteTokenHash: null,
@@ -208,6 +239,7 @@ router.post(
           })
         : null;
 
+    await invalidatePortalDashboardCache();
     res.status(201).json({
       membership: await serializeMembershipWithUser(membership),
       user: {
@@ -222,7 +254,7 @@ router.post(
 
 router.post(
   "/:workspaceId/members/:memberId/resend-invite",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     workspaceParamSchema.parse(req.params);
     const { memberId } = memberParamSchema.parse(req.params);
@@ -257,7 +289,7 @@ router.post(
 
 router.patch(
   "/:workspaceId/members/:memberId",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     workspaceParamSchema.parse(req.params);
     const { memberId } = memberParamSchema.parse(req.params);
@@ -268,28 +300,19 @@ router.patch(
       throw new NotFoundError("Workspace membership not found");
     }
 
-    const requesterRole = req.workspaceMembership?.role;
-    if (
-      (patch.role === "owner" || membership.role === "owner" || patch.status === "disabled") &&
-      requesterRole !== "owner"
-    ) {
-      throw new ForbiddenError("Only owner can change owner role or disable owner membership");
+    const founderUserId = req.workspace?.createdByUserId
+      ? String(req.workspace.createdByUserId)
+      : "";
+    if (founderUserId && founderUserId === String(membership.userId)) {
+      throw new ValidationError(
+        "The workspace owner-of-record account is locked and cannot be changed."
+      );
     }
 
-    if (patch.role) {
-      membership.role = patch.role;
+    if (patch.workspaceRole) {
+      membership.role = patch.workspaceRole;
     }
     if (patch.status) {
-      if (membership.role === "owner" && patch.status !== "active") {
-        const ownerCount = await WorkspaceMembershipModel.countDocuments({
-          workspaceId: membership.workspaceId,
-          role: "owner",
-          status: "active",
-        });
-        if (ownerCount <= 1) {
-          throw new ValidationError("The last active owner cannot be disabled");
-        }
-      }
       membership.status = patch.status;
       if (patch.status !== "invited") {
         membership.inviteTokenHash = null;
@@ -298,13 +321,16 @@ router.patch(
     }
 
     await membership.save();
-    res.json({ membership });
+    await invalidatePortalDashboardCache();
+    res.json({
+      membership: await serializeMembershipWithUser(membership, founderUserId || null),
+    });
   })
 );
 
 router.delete(
   "/:workspaceId/members/:memberId",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     workspaceParamSchema.parse(req.params);
     const { memberId } = memberParamSchema.parse(req.params);
@@ -314,22 +340,17 @@ router.delete(
       throw new NotFoundError("Workspace membership not found");
     }
 
-    if (membership.role === "owner") {
-      if (req.workspaceMembership?.role !== "owner") {
-        throw new ForbiddenError("Only owner can remove owner memberships");
-      }
-
-      const ownerCount = await WorkspaceMembershipModel.countDocuments({
-        workspaceId: membership.workspaceId,
-        role: "owner",
-        status: "active",
-      });
-      if (ownerCount <= 1) {
-        throw new ValidationError("The last active owner cannot be removed");
-      }
+    const founderUserId = req.workspace?.createdByUserId
+      ? String(req.workspace.createdByUserId)
+      : "";
+    if (founderUserId && founderUserId === String(membership.userId)) {
+      throw new ValidationError(
+        "The workspace owner-of-record account is locked and cannot be removed."
+      );
     }
 
     await WorkspaceMembershipModel.findByIdAndDelete(memberId);
+    await invalidatePortalDashboardCache();
     res.json({ deleted: true });
   })
 );

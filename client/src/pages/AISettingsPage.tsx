@@ -1,8 +1,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "../hooks/use-session";
 import { apiRequest } from "../services/api";
-import { AISettings, AuditLog } from "../types/models";
+import { AISettings, AuditLog, BillingState } from "../types/models";
 import geminiModelOptionsData from "../utils/gemini-model-options.json";
+import { BillingUpgradePanel } from "../features/billing/billing-upgrade";
 
 const geminiModelOptions = geminiModelOptionsData.models;
 
@@ -10,10 +11,17 @@ type ToggleRowProps = {
   label: string;
   description: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (value: boolean) => void;
 };
 
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
+function ToggleRow({
+  label,
+  description,
+  checked,
+  disabled,
+  onChange,
+}: ToggleRowProps) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="min-w-0">
@@ -25,9 +33,10 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
         type="button"
         role="switch"
         aria-checked={checked}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={[
-          "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition",
+          "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60",
           checked ? "bg-slate-900" : "bg-slate-300",
         ].join(" ")}
       >
@@ -42,6 +51,17 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
   );
 }
 
+type AIBillingAccess = {
+  allowBYOAI: boolean;
+  allowAutomation: boolean;
+};
+
+type AISettingsResponse = {
+  settings: AISettings | null;
+  billingAccess: AIBillingAccess;
+  billing: BillingState;
+};
+
 export function AISettingsPage() {
   const { activeWorkspace } = useSession();
   const workspaceId = activeWorkspace?._id;
@@ -55,6 +75,11 @@ export function AISettingsPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
   const [clearGeminiApiKey, setClearGeminiApiKey] = useState(false);
+  const [billingAccess, setBillingAccess] = useState<AIBillingAccess>({
+    allowBYOAI: true,
+    allowAutomation: true,
+  });
+  const [billing, setBilling] = useState<BillingState | null>(null);
 
   const geminiKeyStatusLabel = clearGeminiApiKey
     ? "Key will be removed"
@@ -65,6 +90,23 @@ export function AISettingsPage() {
     : settings?.hasGeminiApiKey
     ? "Workspace key saved"
     : "No workspace key saved";
+  const workspaceAIRuntimeLocked =
+    !billingAccess.allowBYOAI || !billingAccess.allowAutomation;
+  const workspaceAILockMessage = !billingAccess.allowBYOAI
+    ? "This plan does not include BYO AI, so workspace AI controls are locked."
+    : !billingAccess.allowAutomation
+      ? "This plan does not include automation, so workspace AI runtime controls are locked."
+      : null;
+  const workspaceAIUpgradeTitle = !billingAccess.allowBYOAI
+    ? "BYO AI is not included"
+    : !billingAccess.allowAutomation
+      ? "Automation is not included"
+      : null;
+  const workspaceAIUpgradeDescription = !billingAccess.allowBYOAI
+    ? "Upgrade the plan before enabling workspace AI settings, saving a Gemini key, or turning on AI-assisted replies."
+    : !billingAccess.allowAutomation
+      ? "Upgrade the plan before enabling automation controls for this workspace."
+      : null;
   const visibleLogs = useMemo(() => {
     const filtered = logs.filter(
       (log) =>
@@ -78,11 +120,13 @@ export function AISettingsPage() {
   const loadSettings = useCallback(async () => {
     if (!workspaceId) return;
 
-    const response = await apiRequest<{ settings: AISettings | null }>(
+    const response = await apiRequest<AISettingsResponse>(
       "/api/ai-settings",
       {},
       { workspaceId }
     );
+    setBillingAccess(response.billingAccess);
+    setBilling(response.billing);
 
     setSettings(
       response.settings ?? {
@@ -99,9 +143,12 @@ export function AISettingsPage() {
         hasGeminiApiKey: false,
         supportedChannels: {
           facebook: true,
+          instagram: true,
           telegram: true,
           viber: true,
           tiktok: true,
+          line: true,
+          website: true,
         },
       }
     );
@@ -155,7 +202,7 @@ export function AISettingsPage() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!settings) return;
+    if (!settings || workspaceAIRuntimeLocked) return;
 
     try {
       setIsSaving(true);
@@ -181,7 +228,7 @@ export function AISettingsPage() {
       }
 
       const [response] = await Promise.all([
-        apiRequest<{ settings: AISettings }>("/api/ai-settings", {
+        apiRequest<AISettingsResponse>("/api/ai-settings", {
           method: "PATCH",
           body: JSON.stringify(payload),
         }),
@@ -199,6 +246,8 @@ export function AISettingsPage() {
       ]);
 
       setSettings(response.settings);
+      setBillingAccess(response.billingAccess);
+      setBilling(response.billing);
       if (clearGeminiApiKey) {
         setSaveMessage("Workspace Gemini key removed.");
       } else if (geminiApiKeyInput.trim()) {
@@ -282,12 +331,18 @@ export function AISettingsPage() {
             <span
               className={[
                 "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1",
-                settings.enabled
+                workspaceAIRuntimeLocked
+                  ? "bg-amber-50 text-amber-700 ring-amber-200"
+                  : settings.enabled
                   ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                   : "bg-slate-100 text-slate-600 ring-slate-200",
               ].join(" ")}
             >
-              {settings.enabled ? "AI enabled" : "AI disabled"}
+              {workspaceAIRuntimeLocked
+                ? "Plan blocked"
+                : settings.enabled
+                  ? "AI enabled"
+                  : "AI disabled"}
             </span>
           </div>
         </div>
@@ -305,9 +360,33 @@ export function AISettingsPage() {
         </div>
       ) : null}
 
+      {workspaceAIRuntimeLocked &&
+      billing &&
+      workspaceAIUpgradeTitle &&
+      workspaceAIUpgradeDescription ? (
+        <BillingUpgradePanel
+          billing={billing}
+          workspaceSlug={activeWorkspace?.slug}
+          workspaceId={activeWorkspace?._id}
+          requestGate={!billingAccess.allowBYOAI ? "byo_ai" : "automation"}
+          title={workspaceAIUpgradeTitle}
+          description={workspaceAIUpgradeDescription}
+          className="shadow-none"
+        />
+      ) : null}
+
+      {workspaceAILockMessage && !billing ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {workspaceAILockMessage}
+        </div>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
         <form
-          className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+          className={[
+            "space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm",
+            workspaceAIRuntimeLocked ? "opacity-70" : "",
+          ].join(" ")}
           onSubmit={handleSubmit}
         >
           <div>
@@ -348,6 +427,7 @@ export function AISettingsPage() {
                 <input
                   type="password"
                   value={geminiApiKeyInput}
+                  disabled={workspaceAIRuntimeLocked}
                   onChange={(event) => {
                     setSaveMessage(null);
                     setGeminiApiKeyInput(event.target.value);
@@ -360,7 +440,7 @@ export function AISettingsPage() {
                       ? "Leave blank to keep current key"
                       : "Enter workspace Gemini API key"
                   }
-                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                 />
                 <p className="mt-1.5 text-xs text-slate-500">
                   The current key is never sent back to the browser. Enter a new one only when replacing it.
@@ -378,12 +458,13 @@ export function AISettingsPage() {
                 </span>
                 <select
                   value={settings.geminiModel}
+                  disabled={workspaceAIRuntimeLocked}
                   onChange={(event) =>
                     setSettings((current) =>
                       current ? { ...current, geminiModel: event.target.value } : current
                     )
                   }
-                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
                 >
                   <option value="">Use server default model</option>
                   {geminiModelOptions.map((model) => (
@@ -413,12 +494,13 @@ export function AISettingsPage() {
 
               <button
                 type="button"
+                disabled={workspaceAIRuntimeLocked}
                 onClick={() => {
                   setSaveMessage(null);
                   setGeminiApiKeyInput("");
                   setClearGeminiApiKey(true);
                 }}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-300 px-4 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-300 px-4 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Clear saved key
               </button>
@@ -436,6 +518,7 @@ export function AISettingsPage() {
               label="AI enabled"
               description="Master switch for all AI behavior in this workspace."
               checked={settings.enabled}
+              disabled={workspaceAIRuntimeLocked}
               onChange={(value) =>
                 setSettings((current) => (current ? { ...current, enabled: value } : current))
               }
@@ -449,6 +532,7 @@ export function AISettingsPage() {
 
               <select
                 value={settings.autoReplyMode}
+                disabled={workspaceAIRuntimeLocked}
                 onChange={(event) =>
                   setSettings((current) =>
                     current
@@ -460,7 +544,7 @@ export function AISettingsPage() {
                       : current
                   )
                 }
-                className="mt-3 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                className="mt-3 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
               >
                 <option value="all">All</option>
                 <option value="after_hours_only">After-hours only</option>
@@ -473,6 +557,7 @@ export function AISettingsPage() {
               label="Fallback replies enabled"
               description="When AI cannot complete a reply, send fallback text outside business hours only."
               checked={settings.afterHoursEnabled}
+              disabled={workspaceAIRuntimeLocked}
               onChange={(value) =>
                 setSettings((current) =>
                   current ? { ...current, afterHoursEnabled: value } : current
@@ -508,6 +593,7 @@ export function AISettingsPage() {
                 max={1}
                 step={0.05}
                 value={settings.confidenceThreshold}
+                disabled={workspaceAIRuntimeLocked}
                 onChange={(event) =>
                   setSettings((current) =>
                     current
@@ -518,7 +604,7 @@ export function AISettingsPage() {
                       : current
                   )
                 }
-                className="w-full accent-slate-900"
+                className="w-full accent-slate-900 disabled:opacity-50"
               />
 
               <input
@@ -527,6 +613,7 @@ export function AISettingsPage() {
                 max={1}
                 step={0.05}
                 value={settings.confidenceThreshold}
+                disabled={workspaceAIRuntimeLocked}
                 onChange={(event) =>
                   setSettings((current) =>
                     current
@@ -537,7 +624,7 @@ export function AISettingsPage() {
                       : current
                   )
                 }
-                className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
               />
             </div>
           </div>
@@ -557,12 +644,13 @@ export function AISettingsPage() {
               id="fallback-message"
               rows={5}
               value={settings.fallbackMessage}
+              disabled={workspaceAIRuntimeLocked}
               onChange={(event) =>
                 setSettings((current) =>
                   current ? { ...current, fallbackMessage: event.target.value } : current
                 )
               }
-              className="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+              className="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
               placeholder="Thanks for your message. A teammate will follow up soon."
             />
           </div>
@@ -575,7 +663,7 @@ export function AISettingsPage() {
             <button
               className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || workspaceAIRuntimeLocked}
             >
               {isSaving ? "Saving..." : "Save settings"}
             </button>

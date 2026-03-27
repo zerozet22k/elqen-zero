@@ -124,6 +124,11 @@ class CannedReplyService {
     return item ? this.toResponse(item) : null;
   }
 
+  async getByIdInWorkspace(id: string, workspaceId: string) {
+    const item = await CannedReplyModel.findOne({ _id: id, workspaceId }).lean();
+    return item ? this.toResponse(item) : null;
+  }
+
   async update(
     id: string,
     patch: {
@@ -162,8 +167,51 @@ class CannedReplyService {
     return this.toResponse(existing.toObject());
   }
 
+  async updateInWorkspace(
+    id: string,
+    workspaceId: string,
+    patch: {
+      title?: string;
+      body?: string;
+      blocks?: OutboundContentBlock[];
+      triggers?: string[];
+      category?: string;
+      isActive?: boolean;
+    }
+  ) {
+    const existing = await CannedReplyModel.findOne({ _id: id, workspaceId });
+    if (!existing) {
+      return null;
+    }
+
+    const normalizedBlocks = normalizeStoredOutboundBlocks({
+      blocks: patch.blocks ?? existing.blocks,
+      body: patch.body ?? existing.body,
+    });
+    const body = deriveLegacyBodyFromBlocks(normalizedBlocks);
+    const blocks = this.toTextOnlyBlocks(body);
+
+    existing.set({
+      ...(patch.title ? { title: patch.title } : {}),
+      ...(patch.category ? { category: patch.category } : {}),
+      ...(typeof patch.isActive === "boolean" ? { isActive: patch.isActive } : {}),
+      ...(patch.triggers
+        ? { triggers: this.normalizeTriggers(patch.triggers) }
+        : {}),
+      body,
+      blocks,
+    });
+
+    await existing.save();
+    return this.toResponse(existing.toObject());
+  }
+
   async remove(id: string) {
     return CannedReplyModel.findByIdAndDelete(id);
+  }
+
+  async removeInWorkspace(id: string, workspaceId: string) {
+    return CannedReplyModel.findOneAndDelete({ _id: id, workspaceId });
   }
 }
 

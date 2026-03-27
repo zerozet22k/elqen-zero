@@ -1,8 +1,11 @@
 export type OutboundBlockChannel =
   | "facebook"
+  | "instagram"
   | "telegram"
   | "viber"
   | "tiktok"
+  | "line"
+  | "website"
   | "any";
 
 export type OutboundStickerPreview = {
@@ -26,6 +29,8 @@ export type OutboundStickerBlock = {
   channel?: OutboundBlockChannel;
   sticker: {
     platformStickerId: string;
+    packageId?: string;
+    stickerResourceType?: string;
     label?: string;
     description?: string;
     emoji?: string;

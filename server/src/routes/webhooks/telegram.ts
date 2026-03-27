@@ -19,7 +19,7 @@ router.post(
       // non-blocking – best effort
     }
 
-    const result = await inboundWebhookService.handle({
+    const result = await inboundWebhookService.receive({
       channel: "telegram",
       body: req.body,
       rawBody: (req as Request & { rawBody?: string }).rawBody,
@@ -29,6 +29,8 @@ router.post(
 
     res.status(200).json({
       processed: result.processed.length,
+      duplicate: result.duplicate,
+      queued: result.queued,
     });
   })
 );

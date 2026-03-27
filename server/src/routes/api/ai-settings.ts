@@ -6,36 +6,35 @@ import { requireWorkspace } from "../../middleware/require-workspace";
 import { requireRole } from "../../middleware/require-role";
 import { encryptField } from "../../lib/crypto";
 import { env } from "../../config/env";
-import {
-  channelSupportService,
-  DEFAULT_SUPPORTED_CHANNELS,
-} from "../../services/channel-support.service";
+import { channelSupportService } from "../../services/channel-support.service";
+import { billingService } from "../../services/billing.service";
 
 const router = Router();
 router.use(requireWorkspace);
 
 const encryptionSecret = () => env.FIELD_ENCRYPTION_KEY || env.SESSION_SECRET;
 
-const serializeSettings = (settings: InstanceType<typeof AISettingsModel> | null) => {
-  if (!settings) return null;
-  const storedGeminiModel = settings.geminiModel || settings.assistantModel || "";
-  const storedGeminiApiKey = settings.geminiApiKey || settings.assistantApiKey || "";
+const serializeSettings = (
+  settings: InstanceType<typeof AISettingsModel> | null,
+  supportedChannels: Awaited<ReturnType<typeof channelSupportService.getSupportedChannels>>
+) => {
+  const storedGeminiModel = settings?.geminiModel || settings?.assistantModel || "";
+  const storedGeminiApiKey = settings?.geminiApiKey || settings?.assistantApiKey || "";
   const autoReplyMode =
-    settings.autoReplyMode || (settings.autoReplyEnabled ? "all" : "none");
+    settings?.autoReplyMode || (settings?.autoReplyEnabled ? "all" : "none");
   return {
-    workspaceId: String(settings.workspaceId),
-    enabled: settings.enabled,
-    autoReplyEnabled: settings.autoReplyEnabled,
+    workspaceId: String(settings?.workspaceId ?? ""),
+    enabled: settings?.enabled ?? true,
+    autoReplyEnabled: settings?.autoReplyEnabled ?? true,
     autoReplyMode,
-    afterHoursEnabled: settings.afterHoursEnabled,
-    confidenceThreshold: settings.confidenceThreshold,
-    fallbackMessage: settings.fallbackMessage,
-    assistantInstructions: settings.assistantInstructions || "",
+    afterHoursEnabled: settings?.afterHoursEnabled ?? true,
+    confidenceThreshold: settings?.confidenceThreshold ?? 0.7,
+    fallbackMessage:
+      settings?.fallbackMessage ??
+      "Thanks for your message. A teammate will follow up soon.",
+    assistantInstructions: settings?.assistantInstructions || "",
     geminiModel: storedGeminiModel,
-    supportedChannels: {
-      ...DEFAULT_SUPPORTED_CHANNELS,
-      ...(settings.supportedChannels ?? {}),
-    },
+    supportedChannels,
     hasGeminiApiKey: !!storedGeminiApiKey,
   };
 };
@@ -44,19 +43,40 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const workspaceId = String(req.workspace?._id ?? "");
-    const settings = await AISettingsModel.findOne({ workspaceId });
-    res.json({ settings: serializeSettings(settings) });
+    const [settings, billing, supportedChannels] = await Promise.all([
+      AISettingsModel.findOne({ workspaceId }),
+      billingService.getWorkspaceBillingState(workspaceId),
+      channelSupportService.getSupportedChannels(workspaceId),
+    ]);
+    res.json({
+      settings: serializeSettings(settings, supportedChannels),
+      billingAccess: {
+        allowBYOAI: billing.serialized.entitlements.allowBYOAI,
+        allowAutomation: billing.serialized.entitlements.allowAutomation,
+      },
+      billing: billing.serialized,
+    });
   })
 );
 
 router.patch(
   "/",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const payload = updateAISettingsSchema.parse({
       ...req.body,
       workspaceId: String(req.workspace?._id ?? ""),
     });
+
+    const requestsBYOAIEnable =
+      payload.enabled === true ||
+      payload.autoReplyEnabled === true ||
+      (payload.autoReplyMode !== undefined && payload.autoReplyMode !== "none") ||
+      (typeof payload.geminiApiKey === "string" && payload.geminiApiKey.trim().length > 0);
+
+    if (requestsBYOAIEnable) {
+      await billingService.assertCanUseBYOAI(payload.workspaceId);
+    }
 
     const updateFields: Record<string, unknown> = {
       workspaceId: payload.workspaceId,
@@ -85,11 +105,22 @@ router.patch(
       updateFields.assistantApiKey = "";
     }
     if (payload.supportedChannels !== undefined) {
-      const currentSupportedChannels =
-        await channelSupportService.getSupportedChannels(payload.workspaceId);
-      updateFields.supportedChannels = {
+      const [currentSupportedChannels, planAllowedChannels] = await Promise.all([
+        channelSupportService.getSupportedChannels(payload.workspaceId),
+        channelSupportService.getPlanAllowedChannels(payload.workspaceId),
+      ]);
+      const mergedChannels = {
         ...currentSupportedChannels,
         ...payload.supportedChannels,
+      };
+      updateFields.supportedChannels = {
+        facebook: planAllowedChannels.facebook ? mergedChannels.facebook : false,
+        instagram: planAllowedChannels.instagram ? mergedChannels.instagram : false,
+        telegram: planAllowedChannels.telegram ? mergedChannels.telegram : false,
+        viber: planAllowedChannels.viber ? mergedChannels.viber : false,
+        tiktok: planAllowedChannels.tiktok ? mergedChannels.tiktok : false,
+        line: planAllowedChannels.line ? mergedChannels.line : false,
+        website: planAllowedChannels.website ? currentSupportedChannels.website : false,
       };
     }
 
@@ -98,7 +129,18 @@ router.patch(
       { $set: updateFields },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
-    res.json({ settings: serializeSettings(settings) });
+    const [billing, supportedChannels] = await Promise.all([
+      billingService.getWorkspaceBillingState(payload.workspaceId),
+      channelSupportService.getSupportedChannels(payload.workspaceId),
+    ]);
+    res.json({
+      settings: serializeSettings(settings, supportedChannels),
+      billingAccess: {
+        allowBYOAI: billing.serialized.entitlements.allowBYOAI,
+        allowAutomation: billing.serialized.entitlements.allowAutomation,
+      },
+      billing: billing.serialized,
+    });
   })
 );
 

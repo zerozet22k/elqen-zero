@@ -3,13 +3,21 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "start": "node scripts/serve-dist.mjs",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.9",
+    "@mui/material": "^7.3.9",
     "@tailwindcss/vite": "^4.2.1",
     "emoji-picker-react": "^4.18.0",
     "react": "^18.3.1",

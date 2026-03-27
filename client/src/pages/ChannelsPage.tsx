@@ -1,11 +1,39 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useSession } from "../hooks/use-session";
-import { apiRequest } from "../services/api";
+import { apiRequest, isApiRequestError } from "../services/api";
 import { connectWorkspaceSocket } from "../services/realtime";
-import { AISettings, Channel, ChannelConnection } from "../types/models";
+import {
+  AISettings,
+  BillingState,
+  Channel,
+  ChannelConnection,
+  PlatformFamily,
+} from "../types/models";
 import { StatusBadge } from "../features/ui/StatusBadge";
+import { PlatformIcons } from "../utils/platform-icons";
+import { buildWorkspacePath } from "../utils/workspace-routes";
+import {
+  BillingUpgradePanel,
+  type BillingUpgradeDetails,
+  formatPlatformFamilyLabel,
+  getBillingUpgradeContent,
+  getBillingUpgradeDetails,
+} from "../features/billing/billing-upgrade";
 
-const channelOptions: Channel[] = ["facebook", "telegram", "viber", "tiktok"];
+const channelOptions: Channel[] = [
+  "facebook",
+  "instagram",
+  "telegram",
+  "viber",
+  "tiktok",
+  "line",
+  "website",
+];
+
+const channelAvailabilityOptions: Channel[] = channelOptions.filter(
+  (option) => option !== "website"
+);
 
 type ConnectionDiagnostics = {
   status: string;
@@ -15,14 +43,29 @@ type ConnectionDiagnostics = {
   diagnostics?: Record<string, unknown>;
 };
 
+type ChannelPreflightDetails = {
+  channelPreflight: true;
+  channel?: Channel;
+  checklist?: Array<{
+    code: string;
+    label: string;
+    description: string;
+    fixPath: string;
+  }>;
+  fixPath?: string | null;
+};
+
 type ChannelsResponse = {
   items: ChannelConnection[];
   publicWebhookBaseUrl: string;
+  billing: BillingState;
 };
 
 type ChannelFormState = {
   displayName: string;
   token: string;
+  lineChannelId: string;
+  lineChannelSecret: string;
   refreshToken: string;
   businessId: string;
   webhookSecret: string;
@@ -37,9 +80,22 @@ type FacebookOAuthPage = {
   accessToken: string;
 };
 
+type FacebookOAuthPopupPayload = {
+  source?: string;
+  type?: string;
+  status?: "success" | "error";
+  state?: string;
+  code?: string;
+  error?: string;
+  errorDescription?: string;
+  timestamp?: string;
+};
+
 const initialFormState: ChannelFormState = {
   displayName: "",
   token: "",
+  lineChannelId: "",
+  lineChannelSecret: "",
   refreshToken: "",
   businessId: "",
   webhookSecret: "",
@@ -62,6 +118,12 @@ const channelMeta: Record<
     credentialHint:
       "Provide a Page access token for this connection. META_APP_ID, META_APP_SECRET, and META_WEBHOOK_VERIFY_TOKEN remain configured on the server.",
   },
+  instagram: {
+    label: "Instagram",
+    description: "Connect an Instagram business account to handle Instagram DMs in this workspace.",
+    credentialHint:
+      "Provide an Instagram Messaging access token. META_APP_ID, META_APP_SECRET, and META_WEBHOOK_VERIFY_TOKEN remain configured on the server.",
+  },
   telegram: {
     label: "Telegram",
     description: "Connect a Telegram bot and register its webhook.",
@@ -78,9 +140,41 @@ const channelMeta: Record<
     credentialHint:
       "Requires a TikTok Business access token. App ID and secret stay on the server via env vars.",
   },
+  line: {
+    label: "LINE",
+    description: "Connect a LINE Messaging API bot for customer inbox conversations.",
+    credentialHint:
+      "Use Channel ID + Channel secret from LINE Developers. Access token can be pasted manually or auto-issued by the server.",
+  },
+  website: {
+    label: "Website Chat",
+    description: "Connect a website widget and map inbound traffic with a connection key.",
+    credentialHint: "Connection key is optional. If blank, the server will generate one.",
+  },
 };
 
 const trimTrailingSlash = (value: string) => value.trim().replace(/\/+$/, "");
+
+const channelToPlatformFamily = (channel: Channel): PlatformFamily => {
+  if (channel === "facebook" || channel === "instagram") {
+    return "meta";
+  }
+
+  return channel;
+};
+
+const isChannelAllowedByPlan = (billing: BillingState | null, channel: Channel) => {
+  if (!billing) {
+    return true;
+  }
+
+  const family = channelToPlatformFamily(channel);
+  if (family === "website") {
+    return billing.entitlements.allowWebsiteChat;
+  }
+
+  return billing.entitlements.allowedPlatformFamilies.includes(family);
+};
 
 function buildWebhookPreviewUrl(params: {
   baseUrl: string;
@@ -93,7 +187,7 @@ function buildWebhookPreviewUrl(params: {
   }
 
   const url = new URL(`/webhooks/${params.channel}`, `${normalizedBaseUrl}/`);
-  if (params.channel === "viber") {
+  if (params.channel === "viber" || params.channel === "website") {
     url.searchParams.set("connectionKey", params.connectionKey?.trim() || "your-key");
   }
 
@@ -108,6 +202,13 @@ function getStatusTone(status?: string) {
     case "verified":
     case "active":
       return "emerald";
+    case "attention_required":
+      return "amber";
+    case "restricted_due_to_plan":
+    case "credentials_invalid":
+      return "rose";
+    case "disconnected":
+      return "default";
     case "pending":
       return "amber";
     case "failed":
@@ -117,6 +218,30 @@ function getStatusTone(status?: string) {
       return "default";
   }
 }
+
+const formatStatusLabel = (value?: string) =>
+  (value ?? "")
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+
+const getChannelPreflightDetails = (
+  error: unknown
+): ChannelPreflightDetails | null => {
+  if (!isApiRequestError(error) || !error.details || typeof error.details !== "object") {
+    return null;
+  }
+
+  if (
+    !("channelPreflight" in error.details) ||
+    (error.details as { channelPreflight?: unknown }).channelPreflight !== true
+  ) {
+    return null;
+  }
+
+  return error.details as ChannelPreflightDetails;
+};
 
 function Field({
   label,
@@ -139,17 +264,33 @@ function Field({
 }
 
 function ChannelSupportToggleRow(props: {
+  channel: Channel;
   label: string;
-  description: string;
   checked: boolean;
+  planBlocked?: boolean;
   disabled?: boolean;
   onChange: (value: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="min-w-0">
+    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 ring-1 ring-slate-200">
+        <img
+          src={PlatformIcons.getIconUrl(props.channel)}
+          alt=""
+          className="h-5 w-5"
+          aria-hidden="true"
+        />
+      </span>
+
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-slate-900">{props.label}</p>
-        <p className="mt-1 text-sm text-slate-500">{props.description}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          {props.planBlocked
+            ? "Blocked by the current plan"
+            : props.checked
+              ? "Enabled for new connections and sends"
+              : "Blocked for new connections and sends"}
+        </p>
       </div>
 
       <button
@@ -340,6 +481,33 @@ function ProviderFields({
     );
   }
 
+  if (channel === "instagram") {
+    return (
+      <>
+        <Field
+          label="Instagram access token"
+          hint="Token must include Instagram messaging permissions for this app/business account."
+        >
+          <input
+            type="password"
+            value={form.token}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, token: event.target.value }))
+            }
+            autoComplete="new-password"
+            className={inputClass}
+            placeholder="Instagram access token"
+          />
+        </Field>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          Meta app credentials are managed on the server.
+          Set `META_APP_ID`, `META_APP_SECRET`, and `META_WEBHOOK_VERIFY_TOKEN`, then verify the callback URL in Meta App Dashboard using `/webhooks/instagram`.
+        </div>
+      </>
+    );
+  }
+
   if (channel === "tiktok") {
     return (
       <>
@@ -404,6 +572,90 @@ function ProviderFields({
     );
   }
 
+  if (channel === "line") {
+    return (
+      <>
+        <Field
+          label="Channel ID"
+          hint="Required when auto-issuing a channel access token from LINE Developers credentials."
+        >
+          <input
+            value={form.lineChannelId}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, lineChannelId: event.target.value }))
+            }
+            autoComplete="off"
+            className={inputClass}
+            placeholder="LINE Channel ID"
+          />
+        </Field>
+
+        <Field
+          label="Messaging API channel access token"
+          hint="Optional. Leave blank to auto-issue from Channel ID + Channel secret."
+        >
+          <input
+            type="password"
+            value={form.token}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, token: event.target.value }))
+            }
+            autoComplete="new-password"
+            className={inputClass}
+            placeholder="LINE Messaging API channel access token"
+          />
+        </Field>
+
+        <Field
+          label="Channel secret"
+          hint="Used to verify LINE webhook signatures (x-line-signature)."
+        >
+          <input
+            type="password"
+            value={form.lineChannelSecret}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                lineChannelSecret: event.target.value,
+              }))
+            }
+            autoComplete="new-password"
+            className={inputClass}
+            placeholder="LINE channel secret"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (channel === "website") {
+    return (
+      <>
+        <Field
+          label="Connection key"
+          hint="Optional. Used in the webhook query string to identify this website chat connection."
+        >
+          <input
+            value={form.connectionKey}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                connectionKey: event.target.value,
+              }))
+            }
+            autoComplete="off"
+            className={inputClass}
+            placeholder="Optional website connection key"
+          />
+        </Field>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          Send website chat events to `/webhooks/website` and include `connectionKey` as a query parameter.
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
       <p className="text-sm font-medium text-slate-900">Pending provider verification</p>
@@ -416,6 +668,7 @@ function ProviderFields({
 
 function ConnectionCard({
   connection,
+  workspaceSlug,
   isSelected,
   busyAction,
   onEdit,
@@ -423,6 +676,7 @@ function ConnectionCard({
   onDelete,
 }: {
   connection: ChannelConnection;
+  workspaceSlug?: string | null;
   isSelected: boolean;
   busyAction: "reconnect" | "delete" | null;
   onEdit: (connection: ChannelConnection) => void;
@@ -445,7 +699,7 @@ function ConnectionCard({
               {connection.displayName || channelMeta[connection.channel].label}
             </h3>
             <StatusBadge
-              label={connection.status}
+              label={formatStatusLabel(connection.status)}
               tone={getStatusTone(connection.status)}
             />
             <StatusBadge label={connection.channel} />
@@ -513,6 +767,29 @@ function ConnectionCard({
         </div>
       ) : null}
 
+      {connection.preflightChecklist?.length ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Fix workspace details before this channel can be used.</p>
+          <ul className="mt-2 space-y-2 leading-6">
+            {connection.preflightChecklist.map((item) => (
+              <li key={item.code}>
+                <span>{item.label}: {item.description}</span>
+                {workspaceSlug ? (
+                  <Link
+                    to={item.fixPath.startsWith("/workspace/")
+                      ? item.fixPath
+                      : buildWorkspacePath(workspaceSlug, "workspace-profile")}
+                    className="ml-2 font-medium underline underline-offset-2"
+                  >
+                    Fix now
+                  </Link>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
@@ -546,6 +823,11 @@ function formStateFromConnection(connection: ChannelConnection): ChannelFormStat
   return {
     displayName: connection.displayName || "",
     token: "",
+    lineChannelId:
+      typeof connection.credentials.channelId === "string"
+        ? connection.credentials.channelId
+        : "",
+    lineChannelSecret: "",
     refreshToken: "",
     businessId:
       (typeof connection.credentials.businessId === "string" &&
@@ -576,17 +858,27 @@ export function ChannelsPage() {
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
   const [cardActionById, setCardActionById] = useState<Record<string, "reconnect" | "delete" | null>>({});
   const [error, setError] = useState<string | null>(null);
+  const [preflightDetails, setPreflightDetails] = useState<ChannelPreflightDetails | null>(
+    null
+  );
+  const [billing, setBilling] = useState<BillingState | null>(null);
   const [publicWebhookBaseUrl, setPublicWebhookBaseUrl] = useState("");
   const [supportedChannels, setSupportedChannels] = useState<Record<Channel, boolean>>({
     facebook: true,
+    instagram: true,
     telegram: true,
     viber: true,
     tiktok: true,
+    line: true,
+    website: true,
   });
   const [facebookOAuthBusy, setFacebookOAuthBusy] = useState(false);
   const [facebookOAuthPages, setFacebookOAuthPages] = useState<FacebookOAuthPage[]>([]);
   const [selectedFacebookPageId, setSelectedFacebookPageId] = useState("");
   const [isUpdatingChannelSupport, setIsUpdatingChannelSupport] = useState(false);
+  const [upgradeDetails, setUpgradeDetails] = useState<ReturnType<
+    typeof getBillingUpgradeDetails
+  >>(null);
 
   const loadConnections = useCallback(async () => {
     if (!workspaceId) return;
@@ -599,6 +891,8 @@ export function ChannelsPage() {
 
     setConnections(response.items);
     setPublicWebhookBaseUrl(response.publicWebhookBaseUrl || "");
+    setBilling(response.billing);
+    setUpgradeDetails(null);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -610,6 +904,7 @@ export function ChannelsPage() {
       try {
         setIsBooting(true);
         setError(null);
+        setPreflightDetails(null);
 
         const [response, settingsResponse] = await Promise.all([
           apiRequest<ChannelsResponse>("/api/channels", {}, { workspaceId }),
@@ -619,12 +914,16 @@ export function ChannelsPage() {
         if (!cancelled) {
           setConnections(response.items);
           setPublicWebhookBaseUrl(response.publicWebhookBaseUrl || "");
+          setBilling(response.billing);
           setSupportedChannels(
             settingsResponse.settings?.supportedChannels ?? {
               facebook: true,
+              instagram: true,
               telegram: true,
               viber: true,
               tiktok: true,
+              line: true,
+              website: true,
             }
           );
         }
@@ -667,9 +966,12 @@ export function ChannelsPage() {
   useEffect(() => {
     setDiagnostics(null);
     setError(null);
+    setUpgradeDetails(null);
     setForm((current) => ({
       ...current,
       token: "",
+      lineChannelId: "",
+      lineChannelSecret: "",
       refreshToken: "",
       businessId: "",
       webhookSecret: "",
@@ -682,9 +984,26 @@ export function ChannelsPage() {
     }
   }, [channel]);
 
+  useEffect(() => {
+    if (!billing) {
+      return;
+    }
+
+    if (isChannelAllowedByPlan(billing, channel)) {
+      return;
+    }
+
+    const fallbackChannel =
+      channelOptions.find((option) => isChannelAllowedByPlan(billing, option)) ?? "website";
+    if (fallbackChannel !== channel) {
+      setChannel(fallbackChannel);
+    }
+  }, [billing, channel]);
+
   const formPayload = useMemo(() => {
     const credentials: Record<string, unknown> = {};
     const webhookConfig: Record<string, unknown> = {};
+    let externalAccountId: string | undefined;
 
     if (channel === "telegram") {
       if (form.token.trim()) {
@@ -708,6 +1027,15 @@ export function ChannelsPage() {
       if (form.token.trim()) {
         credentials.pageAccessToken = form.token.trim();
       }
+      if (selectedFacebookPageId.trim()) {
+        externalAccountId = selectedFacebookPageId.trim();
+      }
+    }
+
+    if (channel === "instagram") {
+      if (form.token.trim()) {
+        credentials.instagramAccessToken = form.token.trim();
+      }
     }
 
     if (channel === "tiktok") {
@@ -722,13 +1050,32 @@ export function ChannelsPage() {
       }
     }
 
+    if (channel === "line") {
+      if (form.token.trim()) {
+        credentials.channelAccessToken = form.token.trim();
+      }
+      if (form.lineChannelId.trim()) {
+        credentials.channelId = form.lineChannelId.trim();
+      }
+      if (form.lineChannelSecret.trim()) {
+        credentials.channelSecret = form.lineChannelSecret.trim();
+      }
+    }
+
+    if (channel === "website") {
+      if (form.connectionKey.trim()) {
+        webhookConfig.connectionKey = form.connectionKey.trim();
+      }
+    }
+
     return {
       workspaceId,
       displayName: form.displayName.trim() || undefined,
+      externalAccountId,
       credentials,
       webhookConfig,
     };
-  }, [channel, form, workspaceId]);
+  }, [channel, form, workspaceId, selectedFacebookPageId]);
 
   const handleConnect = async (event: FormEvent) => {
     event.preventDefault();
@@ -737,6 +1084,8 @@ export function ChannelsPage() {
     try {
       setAction("connect");
       setError(null);
+      setPreflightDetails(null);
+      setUpgradeDetails(null);
 
       const response = editingConnectionId
         ? await apiRequest<{ connection: ChannelConnection }>(
@@ -761,12 +1110,31 @@ export function ChannelsPage() {
         lastError: response.connection.lastError,
       });
 
+      if (channel === "facebook") {
+        console.info("[facebook-oauth] connection saved", {
+          connectionId: response.connection._id,
+          externalAccountId: response.connection.externalAccountId,
+          status: response.connection.status,
+          verificationState: response.connection.verificationState,
+        });
+      }
+
       setEditingConnectionId(null);
       setForm(initialFormState);
 
       await loadConnections();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connection failed.");
+      const nextUpgradeDetails = getBillingUpgradeDetails(err);
+      const nextPreflightDetails = getChannelPreflightDetails(err);
+      setUpgradeDetails(nextUpgradeDetails);
+      setPreflightDetails(nextPreflightDetails);
+      setError(
+        nextUpgradeDetails || nextPreflightDetails
+          ? null
+          : err instanceof Error
+            ? err.message
+            : "Connection failed."
+      );
     } finally {
       setAction(null);
     }
@@ -795,14 +1163,24 @@ export function ChannelsPage() {
     try {
       setFacebookOAuthBusy(true);
       setError(null);
+      setPreflightDetails(null);
 
       const start = await apiRequest<{
         state: string;
+        attemptId: string;
         authUrl: string;
         callbackOrigin: string;
       }>("/api/channels/facebook/oauth/start", {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          uiOrigin: window.location.origin,
+        }),
+      });
+
+      console.info("[facebook-oauth] start", {
+        state: start.state,
+        attemptId: start.attemptId,
+        callbackOrigin: start.callbackOrigin,
       });
 
       const popup = window.open(
@@ -842,22 +1220,26 @@ export function ChannelsPage() {
 
           const onMessage = (event: MessageEvent) => {
             if (event.origin !== start.callbackOrigin) {
+              console.info("[facebook-oauth] ignored message from unexpected origin", {
+                expected: start.callbackOrigin,
+                actual: event.origin,
+              });
               return;
             }
 
-            const data = event.data as {
-              source?: string;
-              state?: string;
-              code?: string;
-              error?: string;
-              errorDescription?: string;
-            };
+            const data = event.data as FacebookOAuthPopupPayload;
+
+            console.info("[facebook-oauth] callback message received", {
+              state: data?.state,
+              status: data?.status,
+              error: data?.error || null,
+            });
 
             if (data?.source !== "facebook-oauth") {
               return;
             }
 
-            if (data.error) {
+            if (data.status === "error" || data.error) {
               cleanup();
               reject(new Error(data.errorDescription || "Facebook login failed."));
               return;
@@ -891,6 +1273,10 @@ export function ChannelsPage() {
         }
       );
 
+      console.info("[facebook-oauth] exchange complete", {
+        pages: exchange.pages.length,
+      });
+
       setFacebookOAuthPages(exchange.pages);
 
       if (!exchange.pages.length) {
@@ -907,6 +1293,7 @@ export function ChannelsPage() {
         displayName: current.displayName.trim() ? current.displayName : defaultPage.name,
       }));
     } catch (err) {
+      console.error("[facebook-oauth] flow failed", err);
       setError(err instanceof Error ? err.message : "Facebook login failed.");
     } finally {
       setFacebookOAuthBusy(false);
@@ -925,12 +1312,19 @@ export function ChannelsPage() {
       token: page.accessToken,
       displayName: current.displayName.trim() ? current.displayName : page.name,
     }));
+
+    console.info("[facebook-oauth] page selected", {
+      pageId: page.id,
+      pageName: page.name,
+      hasAccessToken: !!page.accessToken,
+    });
   };
 
   const handleReconnect = async (connection: ChannelConnection) => {
     try {
       setCardActionById((current) => ({ ...current, [connection._id]: "reconnect" }));
       setError(null);
+      setPreflightDetails(null);
 
       const response = await apiRequest<{ connection: ChannelConnection }>(
         `/api/channels/${connection._id}/reconnect`,
@@ -949,7 +1343,15 @@ export function ChannelsPage() {
 
       await loadConnections();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reconnect failed.");
+      const nextPreflightDetails = getChannelPreflightDetails(err);
+      setPreflightDetails(nextPreflightDetails);
+      setError(
+        nextPreflightDetails
+          ? null
+          : err instanceof Error
+            ? err.message
+            : "Reconnect failed."
+      );
     } finally {
       setCardActionById((current) => ({ ...current, [connection._id]: null }));
     }
@@ -990,6 +1392,8 @@ export function ChannelsPage() {
     try {
       setAction("test");
       setError(null);
+      setPreflightDetails(null);
+      setUpgradeDetails(null);
 
       const response = await apiRequest<{ diagnostics: ConnectionDiagnostics }>(
         `/api/channels/${channel}/test`,
@@ -1001,7 +1405,17 @@ export function ChannelsPage() {
 
       setDiagnostics(response.diagnostics);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Validation failed.");
+      const nextUpgradeDetails = getBillingUpgradeDetails(err);
+      const nextPreflightDetails = getChannelPreflightDetails(err);
+      setUpgradeDetails(nextUpgradeDetails);
+      setPreflightDetails(nextPreflightDetails);
+      setError(
+        nextUpgradeDetails || nextPreflightDetails
+          ? null
+          : err instanceof Error
+            ? err.message
+            : "Validation failed."
+      );
     } finally {
       setAction(null);
     }
@@ -1048,12 +1462,48 @@ export function ChannelsPage() {
   const selectedConnectionId =
     editingConnectionId ??
     (connections.find((item) => item.channel === channel)?._id ?? null);
+  const selectedFamily = channelToPlatformFamily(channel);
   const selectedChannelSupported = supportedChannels[channel];
   const selectedWebhookUrl = buildWebhookPreviewUrl({
     baseUrl: publicWebhookBaseUrl,
     channel,
     connectionKey: form.connectionKey,
   });
+  const selectedFamilyLimit = billing?.entitlements.maxConnectedAccountsPerPlatform[selectedFamily] ?? 0;
+  const selectedFamilyUsed = billing?.usageSummary.connectedAccountsUsedByPlatform[selectedFamily] ?? 0;
+  const selectedFamilyAllowed =
+    selectedFamily === "website"
+      ? !!billing?.entitlements.allowWebsiteChat
+      : !!billing?.entitlements.allowedPlatformFamilies.includes(selectedFamily);
+  const likelyBlockedByPlan =
+    !!billing &&
+    (!selectedFamilyAllowed ||
+      (selectedFamily !== "website" &&
+        !billing.usageSummary.externalPlatformFamiliesUsed.includes(
+          selectedFamily as Exclude<PlatformFamily, "website">
+        ) &&
+        billing.usageSummary.externalPlatformFamiliesUsed.length >=
+          billing.entitlements.maxExternalPlatformFamilies) ||
+      selectedFamilyUsed >= selectedFamilyLimit);
+  const proactiveUpgradeDetails: BillingUpgradeDetails | null = billing
+    ? selectedFamily === "website" && !billing.entitlements.allowWebsiteChat
+      ? {
+          upgradeRequired: true,
+          gate: "website_chat" as const,
+          billing,
+          channel,
+          platformFamily: selectedFamily,
+        }
+      : !selectedFamilyAllowed
+        ? {
+            upgradeRequired: true,
+            gate: "platform_family" as const,
+            billing,
+            channel,
+            platformFamily: selectedFamily,
+          }
+        : null
+    : null;
 
   if (!workspaceId) {
     return (
@@ -1100,7 +1550,7 @@ export function ChannelsPage() {
               Channels
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-              Real provider connections
+              Povider connections
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-500">
               Connect external messaging providers, validate credentials, and inspect current channel health.
@@ -1127,23 +1577,124 @@ export function ChannelsPage() {
         </div>
       ) : null}
 
+      {preflightDetails?.checklist?.length ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+          <p className="font-semibold">
+            Complete workspace details before this channel action can continue.
+          </p>
+          <ul className="mt-3 space-y-2 leading-6">
+            {preflightDetails.checklist.map((item) => (
+              <li key={item.code}>
+                <span>{item.label}: {item.description}</span>
+                {activeWorkspace?.slug ? (
+                  <Link
+                    to={item.fixPath}
+                    className="ml-2 font-medium underline underline-offset-2"
+                  >
+                    Fix now
+                  </Link>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {upgradeDetails ? (
+            <BillingUpgradePanel
+              billing={upgradeDetails.billing}
+              workspaceSlug={activeWorkspace?.slug}
+              workspaceId={activeWorkspace?._id}
+              requestGate={upgradeDetails.gate}
+              {...getBillingUpgradeContent(upgradeDetails)}
+            />
+          ) : null}
+
+      {!upgradeDetails && proactiveUpgradeDetails ? (
+            <BillingUpgradePanel
+              billing={proactiveUpgradeDetails.billing}
+              workspaceSlug={activeWorkspace?.slug}
+              workspaceId={activeWorkspace?._id}
+              requestGate={proactiveUpgradeDetails.gate}
+              {...getBillingUpgradeContent(proactiveUpgradeDetails)}
+            />
+          ) : null}
+
+      {billing ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Current plan
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-950">
+              {billing.subscription.planDisplayName}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {billing.subscription.version
+                ? `v${billing.subscription.version}`
+                : "No version"}
+            </p>
+          </div>
+          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              External families
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-950">
+              {billing.usageSummary.externalPlatformFamiliesUsed.length}/
+              {billing.entitlements.maxExternalPlatformFamilies}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Website Chat is tracked separately
+            </p>
+          </div>
+          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {formatPlatformFamilyLabel(selectedFamily)}
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-950">
+              {selectedFamilyUsed}/{selectedFamilyLimit}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Connection slots for the selected family
+            </p>
+          </div>
+          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Family access
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-950">
+              {selectedFamilyAllowed ? "Included" : "Plan blocked"}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {selectedFamily === "website"
+                ? "Website Chat entitlement"
+                : `${formatPlatformFamilyLabel(selectedFamily)} family entitlement`}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">Channel availability</h3>
+          <h3 className="text-lg font-semibold text-slate-900">External channel availability</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Enable or disable channels for new connections and outbound sends in this workspace.
-            Existing conversations remain visible for reference.
+            Turn channels on or off for new connections and outbound sends in this workspace.
+            Existing conversation history stays visible.
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Website Chat is managed from Workspace Profile so it only lives in one place.
           </p>
         </div>
 
-        <div className="space-y-3">
-          {channelOptions.map((option) => (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {channelAvailabilityOptions.map((option) => (
             <ChannelSupportToggleRow
               key={option}
+              channel={option}
               label={channelMeta[option].label}
-              description={`Allow ${channelMeta[option].label} connections and outbound replies in this workspace.`}
               checked={supportedChannels[option]}
-              disabled={isUpdatingChannelSupport}
+              planBlocked={!isChannelAllowedByPlan(billing, option)}
+              disabled={isUpdatingChannelSupport || !isChannelAllowedByPlan(billing, option)}
               onChange={(value) => {
                 void handleSupportedChannelChange(option, value);
               }}
@@ -1162,7 +1713,20 @@ export function ChannelsPage() {
 
           {!selectedChannelSupported ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              {channelMeta[channel].label} is currently disabled for this workspace. Enable it in Channel availability before testing or saving a connection.
+              {channel === "website"
+                ? "Website Chat is currently disabled in Workspace Profile. Turn it back on there before testing or saving the website connection."
+                : `${channelMeta[channel].label} is currently disabled for this workspace. Enable it in External channel availability before testing or saving a connection.`}
+            </div>
+          ) : null}
+
+          {selectedChannelSupported &&
+          likelyBlockedByPlan &&
+          !upgradeDetails &&
+          !proactiveUpgradeDetails ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              The current plan is close to or already at the limit for{" "}
+              {formatPlatformFamilyLabel(selectedFamily)}. If save or validation is
+              blocked, use the upgrade panel above to request more capacity.
             </div>
           ) : null}
 
@@ -1351,6 +1915,7 @@ export function ChannelsPage() {
                 <ConnectionCard
                   key={connection._id}
                   connection={connection}
+                  workspaceSlug={activeWorkspace?.slug}
                   isSelected={connection._id === selectedConnectionId}
                   busyAction={cardActionById[connection._id] ?? null}
                   onEdit={handleEdit}

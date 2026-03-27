@@ -1,7 +1,15 @@
 import { OutboundContentBlock } from "./outbound-content";
 
-export type Channel = "facebook" | "telegram" | "viber" | "tiktok";
+export type Channel =
+  | "facebook"
+  | "instagram"
+  | "telegram"
+  | "viber"
+  | "tiktok"
+  | "line"
+  | "website";
 export type ConversationStatus = "open" | "pending" | "resolved";
+export type ConversationRoutingState = "bot_active" | "human_pending" | "human_active";
 export type MessageKind =
   | "text"
   | "image"
@@ -15,6 +23,77 @@ export type MessageKind =
   | "unsupported"
   | "system";
 
+export type AttentionItemState =
+  | "open"
+  | "bot_replied"
+  | "awaiting_human"
+  | "human_replied"
+  | "closed";
+
+export type AttentionNeedsHumanReason =
+  | "low_confidence"
+  | "manual_request"
+  | "customer_requested_human"
+  | "policy_block"
+  | "bot_failure"
+  | "after_hours"
+  | "other";
+
+export type AttentionResolutionType =
+  | "bot_reply"
+  | "human_reply"
+  | "auto_ack_only"
+  | "ignored"
+  | "merged_into_newer_item";
+
+export type BotPauseState = "active" | "expired";
+export type ActorKind = "workspace_user" | "platform_user" | "hybrid_user";
+export type PlatformRole =
+  | "founder"
+  | "platform_admin"
+  | "support"
+  | "ops"
+  | "billing"
+  | "staff";
+export type WorkspaceRole =
+  | "owner"
+  | "admin"
+  | "manager"
+  | "agent"
+  | "viewer";
+
+export interface MessageMeta extends Record<string, unknown> {
+  actorUserId?: string | null;
+  actorRunId?: string | null;
+  inReplyToMessageId?: string | null;
+  attentionItemId?: string | null;
+  deliveryError?: string | null;
+}
+
+export interface AttentionItem {
+  _id: string;
+  conversationId: string;
+  openedByInboundMessageIds: string[];
+  lastInboundMessageId: string;
+  state: AttentionItemState;
+  needsHuman: boolean;
+  needsHumanReason?: AttentionNeedsHumanReason | null;
+  assignedUserId?: string | null;
+  claimedAt?: string | null;
+  botPausedAt?: string | null;
+  botPausedUntil?: string | null;
+  botPausedByUserId?: string | null;
+  botPauseState?: BotPauseState | null;
+  acknowledgementMessageId?: string | null;
+  botReplyMessageId?: string | null;
+  humanReplyMessageId?: string | null;
+  resolvedByUserId?: string | null;
+  resolutionType?: AttentionResolutionType | null;
+  openedAt: string;
+  updatedAt: string;
+  resolvedAt?: string | null;
+}
+
 export interface SessionData {
   token: string;
   user: {
@@ -22,16 +101,355 @@ export interface SessionData {
     email: string;
     name: string;
     avatarUrl?: string;
+    actorKind: ActorKind;
+    platformRole?: PlatformRole | null;
+    authProvider?: "password" | "google" | "hybrid";
   };
   workspaces: Array<{
     _id: string;
     name: string;
     slug: string;
     timeZone: string;
-    role: "owner" | "admin" | "staff";
-    status?: "active" | "invited" | "disabled";
+    workspaceRole: WorkspaceRole;
+    status?: "active" | "invited" | "disabled" | "inactive_due_to_plan_limit";
   }>;
   activeWorkspaceId: string;
+  blockedAccess?: {
+    reason: "inactive_due_to_plan_limit";
+    message: string;
+    workspaces: Array<{
+      _id: string;
+      name: string;
+      slug: string;
+    }>;
+  } | null;
+}
+
+export interface AccountProfile {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  actorKind: ActorKind;
+  platformRole?: PlatformRole | null;
+  authProvider?: "password" | "google" | "hybrid";
+  workspaceCount: number;
+}
+
+export interface PortalStaffUser {
+  _id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  platformRole: PlatformRole;
+  authProvider?: "password" | "google" | "hybrid";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BillingPlanCode = string;
+export type BillingAccountStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "grace_period"
+  | "restricted"
+  | "free_fallback"
+  | "canceled"
+  | "paused";
+export type BillingInterval = "monthly" | "yearly" | "manual";
+export type BillingScheduledChangeKind = "downgrade" | "cancel";
+export type BillingOverrideType =
+  | "entitlement_override"
+  | "trial_extension"
+  | "manual_discount"
+  | "manual_status";
+export type BillingPricingMode = "free" | "fixed" | "manual";
+export type BillingPlanGroup = "standard" | "custom";
+export type PlatformFamily =
+  | "website"
+  | "meta"
+  | "telegram"
+  | "viber"
+  | "tiktok"
+  | "line";
+
+export interface BillingEntitlements {
+  maxWorkspaces: number;
+  maxSeats: number;
+  allowedPlatformFamilies: PlatformFamily[];
+  maxExternalPlatformFamilies: number;
+  maxConnectedAccountsPerPlatform: Record<PlatformFamily, number>;
+  allowWebsiteChat: boolean;
+  allowCustomDomain: boolean;
+  allowBYOAI: boolean;
+  allowAutomation: boolean;
+  allowAuditExports: boolean;
+  allowExtraSeats: boolean;
+  allowExtraWorkspaces: boolean;
+  allowExtraConnections: boolean;
+}
+
+export interface BillingState {
+  account: {
+    _id: string;
+    ownerUserId: string | null;
+    name: string;
+    status: BillingAccountStatus;
+    createdAt: string;
+  };
+  subscription: {
+    _id: string;
+    provider: "manual" | "stripe";
+    providerSubscriptionId?: string | null;
+    status: BillingAccountStatus;
+    planCatalogId: string | null;
+    planVersionId: string | null;
+    planCode: BillingPlanCode;
+    planDisplayName: string;
+    version: number | null;
+    billingInterval: BillingInterval;
+    priceAmount: number;
+    currency: string;
+    currentPeriodStart?: string | null;
+    currentPeriodEnd?: string | null;
+    cancelAtPeriodEnd: boolean;
+    trialEndsAt?: string | null;
+    trialPlanCode?: string | null;
+    scheduledPlanCatalogId?: string | null;
+    scheduledPlanVersionId?: string | null;
+    scheduledPlanCode?: string | null;
+    scheduledPlanDisplayName?: string | null;
+    scheduledChangeKind?: BillingScheduledChangeKind | null;
+    scheduledChangeEffectiveAt?: string | null;
+    renewsAt?: string | null;
+    gracePeriodEndsAt?: string | null;
+  };
+  entitlements: BillingEntitlements;
+  usageSummary: {
+    billingAccountId: string;
+    periodStart: string;
+    periodEnd: string;
+    seatsUsed: number;
+    workspacesUsed: number;
+    connectedAccountsUsedByPlatform: Record<PlatformFamily, number>;
+    platformFamiliesUsed: PlatformFamily[];
+    externalPlatformFamiliesUsed: Array<Exclude<PlatformFamily, "website">>;
+    seatsRemaining: number;
+    workspacesRemaining: number;
+    externalPlatformFamiliesRemaining: number;
+  };
+  overrides: {
+    activeCount: number;
+  };
+  actionRequiredBeforeEffectiveDate: string[];
+  billingActivity: {
+    outstandingAmount: number | null;
+    currency: string | null;
+    latestChargeStatus: string | null;
+    nextBillingAt: string | null;
+    latestInvoiceLabel: string | null;
+  };
+}
+
+export interface BillingAccountProfile {
+  accountId: string;
+  name: string;
+  companyLegalName: string;
+  billingEmail: string;
+  billingPhone: string;
+  billingAddress: {
+    line1: string;
+    line2: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  paymentMethod: {
+    provider: "stripe" | "manual" | null;
+    customerId: string | null;
+    brand: string | null;
+    last4: string | null;
+    expMonth: number | null;
+    expYear: number | null;
+  };
+}
+
+export interface BillingAccountChoiceSummary {
+  _id: string;
+  name: string;
+  planDisplayName: string;
+  version: number | null;
+  status: BillingAccountStatus;
+  workspaceCount: number;
+  isDefault: boolean;
+}
+
+export interface OwnedBillingAccountSummary {
+  billing: BillingState;
+  accountProfile: BillingAccountProfile;
+  stripe: BillingStripeState;
+  workspaceCount: number;
+  attachedWorkspaces: Array<{
+    _id: string;
+    name: string;
+    slug: string;
+  }>;
+  isDefault: boolean;
+}
+
+export interface BillingStripeState {
+  configured: boolean;
+  customerId: string | null;
+  subscriptionId: string | null;
+  canOpenPortal: boolean;
+  portalConfigurationId: string | null;
+}
+
+export interface BillingPaymentProviders {
+  stripe: {
+    enabled: boolean;
+    configured: boolean;
+    available: boolean;
+  };
+  manualEmail: {
+    enabled: boolean;
+    available: boolean;
+    contactEmail: string | null;
+  };
+  kbzpay: {
+    enabled: boolean;
+    available: boolean;
+    contactEmail: string | null;
+  };
+}
+
+export interface BillingOverrideSummary {
+  _id: string;
+  type: BillingOverrideType;
+  payload: Record<string, unknown>;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  reason?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+  active: boolean;
+}
+
+export interface PlanVersionSummary {
+  _id: string;
+  planCatalogId: string;
+  version: number;
+  active: boolean;
+  billingInterval: BillingInterval;
+  priceAmount: number;
+  currency: string;
+  stripeProductId?: string | null;
+  stripePriceId?: string | null;
+  entitlements: BillingEntitlements;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string | null;
+}
+
+export interface PlanCatalogSummary {
+  _id: string;
+  code: string;
+  displayName: string;
+  sortOrder: number;
+  showPublicly: boolean;
+  selfServe: boolean;
+  pricingMode: BillingPricingMode;
+  planGroup: BillingPlanGroup;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  currentSubscriptions: number;
+  versions: PlanVersionSummary[];
+}
+
+export interface AccountTrialState {
+  available: boolean;
+  hasUsedTrial: boolean;
+  trialStartedAt: string | null;
+  trialConsumedAt: string | null;
+  trialUsedByBillingAccountId: string | null;
+  trialUsedOnPlanCode: string | null;
+}
+
+export interface PortalWorkspaceSummary {
+  _id: string;
+  name: string;
+  slug: string;
+  timeZone: string;
+  owner: {
+    _id: string;
+    name: string;
+    email: string;
+  } | null;
+  memberCounts: {
+    total: number;
+    active: number;
+    invited: number;
+    disabled: number;
+  };
+  billing: BillingState;
+  connectionCounts: {
+    total: number;
+    active: number;
+  };
+  channels: string[];
+  publicChatEnabled: boolean;
+  websiteChatAvailable: boolean;
+  publicPagePath: string;
+  publicChatPagePath: string;
+  publicPageUrl: string;
+  publicChatPageUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PortalWorkspaceDetail extends PortalWorkspaceSummary {
+  bio: string;
+  description: string;
+  websiteUrl: string;
+  supportEmail: string;
+  supportPhone: string;
+  welcomeMessage: string;
+  members: Array<{
+    _id: string;
+    workspaceRole: WorkspaceRole;
+    status: "active" | "invited" | "disabled" | "inactive_due_to_plan_limit";
+    inviteExpiresAt?: string | null;
+    inviteAcceptedAt?: string | null;
+    user: {
+      _id: string;
+      name: string;
+      email: string;
+    } | null;
+  }>;
+  connections: Array<{
+    _id: string;
+    channel: string;
+    status: string;
+    displayName: string;
+    verificationState: string;
+    lastInboundAt?: string | null;
+    lastOutboundAt?: string | null;
+    lastError?: string | null;
+  }>;
+  auditTrail: Array<{
+    _id: string;
+    actorType: string;
+    actorId?: string | null;
+    eventType: string;
+    reason?: string | null;
+    data?: Record<string, unknown>;
+    createdAt: string;
+  }>;
+  planCatalogs?: PlanCatalogSummary[];
+  overrides?: BillingOverrideSummary[];
 }
 
 export interface Conversation {
@@ -48,14 +466,14 @@ export interface Conversation {
   lastMessageAt?: string;
   lastMessageText?: string;
   aiEnabled: boolean;
-  aiState:
-  | "idle"
-  | "suggesting"
-  | "auto_replied"
-  | "needs_human"
-  | "human_requested"
-  | "human_active";
+  routingState: ConversationRoutingState;
+  botPausedAt?: string | null;
+  botPausedUntil?: string | null;
+  botPausedByUserId?: string | null;
+  botPauseState?: BotPauseState | null;
   tags: string[];
+  currentAttentionItemId?: string | null;
+  currentAttentionItem?: AttentionItem | null;
   contactName?: string;
   contact?: {
     _id: string;
@@ -113,9 +531,7 @@ export interface Message {
   };
   unsupportedReason?: string | null;
   status: "received" | "queued" | "sent" | "delivered" | "read" | "failed";
-  meta?: Record<string, unknown> & {
-    deliveryError?: string | null;
-  };
+  meta?: MessageMeta;
   delivery?: {
     status: "queued" | "sent" | "delivered" | "read" | "failed";
     externalMessageId?: string | null;
@@ -147,7 +563,15 @@ export interface ChannelConnection {
   channel: Channel;
   displayName: string;
   externalAccountId: string;
-  status: "active" | "inactive" | "pending" | "error";
+  status:
+    | "active"
+    | "attention_required"
+    | "restricted_due_to_plan"
+    | "credentials_invalid"
+    | "disconnected"
+    | "inactive"
+    | "pending"
+    | "error";
   webhookUrl?: string | null;
   webhookVerified: boolean;
   verificationState:
@@ -159,6 +583,12 @@ export interface ChannelConnection {
   lastInboundAt?: string | null;
   lastOutboundAt?: string | null;
   lastError?: string | null;
+  preflightChecklist?: Array<{
+    code: string;
+    label: string;
+    description: string;
+    fixPath: string;
+  }>;
   credentials: Record<string, unknown>;
   webhookConfig: Record<string, unknown>;
   capabilities: Record<string, unknown>;
@@ -247,5 +677,81 @@ export interface AuditLog {
   confidence?: number | null;
   sourceHints: string[];
   data?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface WorkspaceStickerLibraryItem {
+  _id: string;
+  workspaceId: string;
+  channel: "telegram" | "viber" | "line";
+  providerRef: string;
+  platformStickerId: string;
+  label: string;
+  description?: string;
+  emoji?: string;
+  providerMeta?: {
+    telegram?: {
+      fileId: string;
+      thumbnailFileId?: string;
+      isAnimated?: boolean;
+      isVideo?: boolean;
+    };
+    viber?: {
+      previewUrl?: string;
+    };
+    line?: {
+      packageId: string;
+      stickerResourceType?: string;
+      storeUrl?: string;
+      packTitle?: string;
+    };
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WorkspaceProfile {
+  _id: string;
+  name: string;
+  slug: string;
+  timeZone: string;
+  bio: string;
+  publicDescription: string;
+  publicWebsiteUrl: string;
+  publicSupportEmail: string;
+  publicSupportPhone: string;
+  publicLogoUrl: string;
+  publicWelcomeMessage: string;
+  publicChatEnabled: boolean;
+  websiteChatAvailable: boolean;
+  publicChatPagePath: string;
+  publicChatPageUrl: string;
+  publicPagePath: string;
+  publicPageUrl: string;
+  websiteChatEntitled: boolean;
+  billing: BillingState;
+}
+
+export interface PublicWorkspaceProfile {
+  _id: string;
+  name: string;
+  slug: string;
+  bio: string;
+  publicDescription: string;
+  publicWebsiteUrl: string;
+  publicSupportEmail: string;
+  publicSupportPhone: string;
+  publicLogoUrl: string;
+  publicWelcomeMessage: string;
+  publicChatEnabled: boolean;
+  websiteChatAvailable: boolean;
+}
+
+export interface PublicWorkspaceChatMessage {
+  _id: string;
+  direction: "inbound" | "outbound";
+  senderType: "customer" | "agent" | "automation" | "ai" | "system";
+  kind: MessageKind;
+  body: string;
   createdAt: string;
 }

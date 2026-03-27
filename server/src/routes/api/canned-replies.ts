@@ -24,7 +24,7 @@ router.get(
 
 router.post(
   "/",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const payload = createCannedReplySchema.parse({
       ...req.body,
@@ -39,7 +39,10 @@ router.get(
   "/:id",
   asyncHandler(async (req, res) => {
     const { id } = objectIdParamSchema.parse(req.params);
-    const item = await cannedReplyService.getById(id);
+    const item = await cannedReplyService.getByIdInWorkspace(
+      id,
+      String(req.workspace?._id ?? "")
+    );
     if (!item) {
       throw new NotFoundError("Canned reply not found");
     }
@@ -50,11 +53,15 @@ router.get(
 
 router.patch(
   "/:id",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const { id } = objectIdParamSchema.parse(req.params);
     const patch = updateCannedReplySchema.parse(req.body);
-    const item = await cannedReplyService.update(id, patch);
+    const item = await cannedReplyService.updateInWorkspace(
+      id,
+      String(req.workspace?._id ?? ""),
+      patch
+    );
     if (!item) {
       throw new NotFoundError("Canned reply not found");
     }
@@ -65,9 +72,13 @@ router.patch(
 
 router.delete(
   "/:id",
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const { id } = objectIdParamSchema.parse(req.params);
-    const item = await cannedReplyService.remove(id);
+    const item = await cannedReplyService.removeInWorkspace(
+      id,
+      String(req.workspace?._id ?? "")
+    );
     if (!item) {
       throw new NotFoundError("Canned reply not found");
     }

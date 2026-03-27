@@ -1,4 +1,10 @@
 import type { EmojiClickData } from "emoji-picker-react";
+import AttachFileRoundedIcon from "@mui/icons-material/AttachFileRounded";
+import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
+import SentimentSatisfiedAltRoundedIcon from "@mui/icons-material/SentimentSatisfiedAltRounded";
+import SendRoundedIcon from "@mui/icons-material/SendRounded";
+import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
+import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import {
   ChangeEvent,
   FormEvent,
@@ -22,10 +28,28 @@ export type ComposerSendPayload = {
   attachment: File | null;
 };
 
+export type ComposerSendStickerPayload = {
+  platformStickerId: string;
+  packageId?: string;
+  stickerResourceType?: string;
+  label?: string;
+  description?: string;
+  emoji?: string;
+};
+
 type ComposerProps = {
   disabled?: boolean;
   disabledReason?: string;
   error?: string;
+  aiControl?: {
+    primaryLabel: string;
+    onPrimary: () => Promise<void>;
+    secondaryLabel?: string;
+    onSecondary?: () => Promise<void>;
+    disabled?: boolean;
+    secondaryDisabled?: boolean;
+  } | null;
+  aiControlError?: string | null;
   channel?: Channel | null;
   cannedReplies?: Array<{
     _id: string;
@@ -38,7 +62,7 @@ type ComposerProps = {
   stickerCatalogError?: string | null;
   isStickerCatalogLoading?: boolean;
   onSend: (payload: ComposerSendPayload) => Promise<void>;
-  onSendSticker?: (platformStickerId: string) => Promise<void>;
+  onSendSticker?: (payload: ComposerSendStickerPayload) => Promise<void>;
   onComposeActivityChange?: (active: boolean) => void;
 };
 
@@ -124,6 +148,8 @@ export function Composer({
   disabled = false,
   disabledReason,
   error,
+  aiControl,
+  aiControlError,
   channel,
   cannedReplies = [],
   stickerCatalog,
@@ -147,9 +173,12 @@ export function Composer({
   const isDisabled = disabled || sending;
   const canSend = !isDisabled && (Boolean(trimmedText) || Boolean(attachment));
   const stickerChannelSupported =
-    stickerCatalog?.supported ?? (channel === "telegram" || channel === "viber");
+    stickerCatalog?.supported ??
+    (channel === "telegram" || channel === "viber" || channel === "line");
   const canUseStickerPicker =
-    stickerChannelSupported && (channel === "telegram" || channel === "viber");
+    stickerChannelSupported &&
+    (channel === "telegram" || channel === "viber" || channel === "line");
+  const canUseCustomStickerId = channel === "telegram" || channel === "viber";
   const stickerItems = stickerCatalog?.items ?? [];
   const cannedReplyMatch =
     !attachment && !/^\/sticker\b/i.test(trimmedText)
@@ -296,19 +325,45 @@ export function Composer({
     setAttachment(file);
   };
 
-  const handleSendSticker = async (platformStickerId: string) => {
+  const handleSendSticker = async (
+    input: string | StickerCatalogItem | ComposerSendStickerPayload
+  ) => {
     if (isDisabled || !onSendSticker) {
       return;
     }
 
-    const normalizedId = platformStickerId.trim();
-    if (!normalizedId) {
+    const payload =
+      typeof input === "string"
+        ? {
+            platformStickerId: input.trim(),
+          }
+        : "id" in input
+          ? {
+              platformStickerId: input.platformStickerId.trim(),
+              packageId: input.providerMeta?.line?.packageId?.trim(),
+              stickerResourceType: input.providerMeta?.line?.stickerResourceType?.trim(),
+              label: input.label,
+              description: input.description,
+              emoji: input.emoji,
+            }
+          : "platformStickerId" in input
+          ? {
+              platformStickerId: input.platformStickerId.trim(),
+              packageId: input.packageId?.trim(),
+              stickerResourceType: input.stickerResourceType?.trim(),
+              label: input.label,
+              description: input.description,
+              emoji: input.emoji,
+            }
+          : null;
+
+    if (!payload?.platformStickerId) {
       return;
     }
 
     try {
       setSending(true);
-      await onSendSticker(normalizedId);
+      await onSendSticker(payload);
       setActiveUtilityPanel(null);
       setCustomStickerId("");
     } finally {
@@ -407,6 +462,12 @@ export function Composer({
         </div>
       ) : null}
 
+      {aiControlError ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {aiControlError}
+        </div>
+      ) : null}
+
       {attachment ? (
         <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
           <span className="max-w-55 truncate">{attachment.name}</span>
@@ -473,24 +534,39 @@ export function Composer({
       ) : null}
 
       <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+        {aiControl ? (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void aiControl.onPrimary()}
+              disabled={sending || aiControl.disabled}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              title={aiControl.primaryLabel}
+              aria-label={aiControl.primaryLabel}
+            >
+              <ScheduleRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+
+            {aiControl.secondaryLabel && aiControl.onSecondary ? (
+              <button
+                type="button"
+                onClick={() => void aiControl.onSecondary?.()}
+                disabled={sending || aiControl.secondaryDisabled}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                title={aiControl.secondaryLabel}
+                aria-label={aiControl.secondaryLabel}
+              >
+                <AutorenewRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         <label
           className="shrink-0 cursor-pointer text-slate-400 transition-colors hover:text-slate-600"
           aria-label="Attach file"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.75}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-            />
-          </svg>
+          <AttachFileRoundedIcon className="h-5 w-5" aria-hidden="true" />
           <input
             type="file"
             disabled={isDisabled}
@@ -642,9 +718,9 @@ export function Composer({
                                 key={item.id}
                                 type="button"
                                 className="rounded-2xl border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-slate-300 hover:bg-slate-100"
-                                onClick={() => void handleSendSticker(item.id)}
+                                onClick={() => void handleSendSticker(item)}
                                 disabled={isDisabled}
-                                title={`${item.label} (${item.id})`}
+                                title={`${item.label} (${item.platformStickerId})`}
                               >
                                 <div className="flex h-20 items-center justify-center overflow-hidden rounded-xl bg-white">
                                   <StickerTilePreview item={item} />
@@ -664,36 +740,43 @@ export function Composer({
                           </div>
                         )}
 
-                        <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 p-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                            Custom Sticker ID
-                          </p>
-                          <input
-                            value={customStickerId}
-                            onChange={(event) => setCustomStickerId(event.target.value)}
-                            placeholder={
-                              channel === "viber"
-                                ? "Paste Viber sticker_id"
-                                : "Paste Telegram file_id"
-                            }
-                            className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-slate-400"
-                          />
-                          <button
-                            type="button"
-                            className="h-9 w-full rounded-xl bg-slate-900 text-xs font-semibold text-white transition hover:bg-slate-950 disabled:bg-slate-300"
-                            onClick={() => void handleSendSticker(customStickerId)}
-                            disabled={isDisabled || !customStickerId.trim()}
-                          >
-                            Send sticker ID
-                          </button>
-                          <p className="text-[11px] text-slate-400">
-                            `/sticker &lt;id&gt;` still works as a fallback.
-                          </p>
-                        </div>
+                        {canUseCustomStickerId ? (
+                          <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                              Custom Sticker ID
+                            </p>
+                            <input
+                              value={customStickerId}
+                              onChange={(event) => setCustomStickerId(event.target.value)}
+                              placeholder={
+                                channel === "viber"
+                                  ? "Paste Viber sticker_id"
+                                  : "Paste Telegram file_id"
+                              }
+                              className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-slate-400"
+                            />
+                            <button
+                              type="button"
+                              className="h-9 w-full rounded-xl bg-slate-900 text-xs font-semibold text-white transition hover:bg-slate-950 disabled:bg-slate-300"
+                              onClick={() => void handleSendSticker(customStickerId)}
+                              disabled={isDisabled || !customStickerId.trim()}
+                            >
+                              Send sticker ID
+                            </button>
+                            <p className="text-[11px] text-slate-400">
+                              `/sticker &lt;id&gt;` still works as a fallback.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[11px] text-slate-500">
+                            LINE stickers are sent from saved workspace stickers because each
+                            sticker needs both a package ID and a sticker ID.
+                          </div>
+                        )}
                       </>
                     ) : (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800">
-                        Direct sticker sending is available for Telegram and Viber conversations.
+                        Direct sticker sending is available for Telegram, Viber, and LINE conversations.
                       </div>
                     )}
                   </div>
@@ -718,19 +801,7 @@ export function Composer({
             onClick={handleOpenCannedReplies}
             disabled={sending}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.75}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 12h7" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 16h5" />
-              <rect x="4" y="5" width="16" height="14" rx="2" />
-            </svg>
+            <NotesRoundedIcon className="h-5 w-5" aria-hidden="true" />
           </button>
 
           <button
@@ -745,20 +816,7 @@ export function Composer({
             onClick={handleTogglePanel}
             disabled={sending}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.75}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <SentimentSatisfiedAltRoundedIcon className="h-5 w-5" aria-hidden="true" />
           </button>
 
           <button
@@ -768,27 +826,9 @@ export function Composer({
             className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-white transition hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400"
           >
             {sending ? (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
+              <AutorenewRoundedIcon className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
+              <SendRoundedIcon className="h-4 w-4" aria-hidden="true" />
             )}
           </button>
         </div>

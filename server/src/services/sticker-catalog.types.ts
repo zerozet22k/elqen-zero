@@ -10,10 +10,16 @@ export interface StickerPreview {
 
 export interface StickerCatalogItem {
   id: string;
+  platformStickerId: string;
   label: string;
   description?: string;
   emoji?: string;
   preview?: StickerPreview;
+  providerMeta?: {
+    telegram?: TelegramStickerCatalogItemMeta;
+    viber?: ViberStickerCatalogItemMeta;
+    line?: LineStickerCatalogItemMeta;
+  };
 }
 
 export interface StickerCatalog {
@@ -39,14 +45,23 @@ export interface ViberStickerCatalogItemMeta {
   previewUrl?: string;
 }
 
+export interface LineStickerCatalogItemMeta {
+  packageId: string;
+  stickerResourceType?: string;
+  storeUrl?: string;
+  packTitle?: string;
+}
+
 export interface StickerCatalogSourceItem {
   id: string;
+  platformStickerId: string;
   label: string;
   description?: string;
   emoji?: string;
   providerMeta?: {
     telegram?: TelegramStickerCatalogItemMeta;
     viber?: ViberStickerCatalogItemMeta;
+    line?: LineStickerCatalogItemMeta;
   };
 }
 

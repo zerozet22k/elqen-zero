@@ -1,9 +1,10 @@
 import { InferSchemaType, HydratedDocument, Schema, model } from "mongoose";
 import {
   CHANNELS,
-  CONVERSATION_AI_STATES,
+  CONVERSATION_ROUTING_STATES,
   CONVERSATION_STATUSES,
 } from "../channels/types";
+import { normalizeConversationRoutingState } from "../lib/conversation-ai-state";
 
 const conversationSchema = new Schema(
   {
@@ -31,16 +32,21 @@ const conversationSchema = new Schema(
     lastMessageAt: { type: Date, default: null },
     lastMessageText: { type: String, default: "" },
     aiEnabled: { type: Boolean, default: true },
-    aiState: {
+    routingState: {
       type: String,
-      enum: CONVERSATION_AI_STATES,
-      default: "idle",
+      enum: CONVERSATION_ROUTING_STATES,
+      default: "bot_active",
     },
+    botPausedAt: { type: Date, default: null },
+    botPausedUntil: { type: Date, default: null },
+    botPausedByUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     tags: { type: [String], default: [] },
   },
   {
     collection: "conversations",
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
@@ -48,6 +54,11 @@ conversationSchema.index(
   { workspaceId: 1, channel: 1, channelAccountId: 1, externalChatId: 1 },
   { unique: true }
 );
+
+conversationSchema.pre("validate", function normalizeAIState(next) {
+  this.routingState = normalizeConversationRoutingState(this.routingState);
+  next();
+});
 
 conversationSchema.index({ workspaceId: 1, lastMessageAt: -1 });
 

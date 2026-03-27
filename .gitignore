@@ -74,6 +74,13 @@ temp/
 .parcel-cache/
 
 # ------------------------
+# Local planning / agent notes
+# ------------------------
+AGENTS.md
+PLANS.md
+APPREADME.md
+
+# ------------------------
 # Package manager lockfiles
 # Keep these if you use npm consistently
 # ------------------------

@@ -9,7 +9,8 @@ export type WorkspaceSocketEvent =
   | "message.sent"
   | "message.failed"
   | "connection.updated"
-  | "presence.updated";
+  | "presence.updated"
+  | "user.updated";
 
 export const connectWorkspaceSocket = (
   workspaceId: string,

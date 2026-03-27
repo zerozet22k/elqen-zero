@@ -7,6 +7,21 @@ type ApiAuthContext = {
   workspaceId: string | null;
 };
 
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string,
+    public readonly details?: unknown
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
+export const isApiRequestError = (value: unknown): value is ApiRequestError =>
+  value instanceof ApiRequestError;
+
 let apiAuthContext: ApiAuthContext = {
   token: null,
   workspaceId: null,
@@ -60,7 +75,12 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error?.message ?? "Request failed");
+    throw new ApiRequestError(
+      payload.error?.message ?? "Request failed",
+      response.status,
+      payload.error?.code,
+      payload.error?.details
+    );
   }
 
   return response.json() as Promise<T>;

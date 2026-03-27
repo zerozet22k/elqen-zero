@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   CHANNELS,
-  CONVERSATION_AI_STATES,
+  CONVERSATION_ROUTING_STATES,
   CONVERSATION_STATUSES,
   OUTBOUND_MESSAGE_KINDS,
   SENDER_TYPES,
@@ -45,6 +45,8 @@ export const outboundContentBlockSchema = z.discriminatedUnion("kind", [
     channel: contentBlockChannelSchema.optional(),
     sticker: z.object({
       platformStickerId: z.string().min(1),
+      packageId: z.string().min(1).optional(),
+      stickerResourceType: z.string().optional(),
       label: z.string().optional(),
       description: z.string().optional(),
       emoji: z.string().optional(),
@@ -206,7 +208,7 @@ export const updateConversationSchema = z.object({
   status: z.enum(CONVERSATION_STATUSES).optional(),
   assigneeUserId: z.string().nullable().optional(),
   aiEnabled: z.boolean().optional(),
-  aiState: z.enum(CONVERSATION_AI_STATES).optional(),
+  routingState: z.enum(CONVERSATION_ROUTING_STATES).optional(),
   tags: z.array(z.string()).optional(),
   unreadCount: z.number().int().min(0).optional(),
 });
@@ -273,9 +275,11 @@ export const updateAISettingsSchema = z.object({
   supportedChannels: z
     .object({
       facebook: z.boolean().optional(),
+      instagram: z.boolean().optional(),
       telegram: z.boolean().optional(),
       viber: z.boolean().optional(),
       tiktok: z.boolean().optional(),
+      line: z.boolean().optional(),
     })
     .optional(),
 });

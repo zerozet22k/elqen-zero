@@ -132,7 +132,7 @@ async function seedConversation(input: SeedConversationInput) {
         contactId: contact._id,
         status: input.status,
         aiEnabled: false,
-        aiState: "idle",
+        routingState: "bot_active",
         unreadCount: input.unreadCount,
         lastMessageText: input.lastMessageText,
         lastMessageAt: input.lastMessageAt,
@@ -286,7 +286,7 @@ async function seed() {
       unreadCount: 2,
       lastMessageText: "[Unsupported: Messenger attachment type is not mapped in MVP]",
       lastMessageAt: new Date(now.getTime() - 35 * 60 * 1000),
-      tags: ["seeded-history", "needs_human"],
+      tags: ["seeded-history", "human_pending"],
       messages: [
         {
           externalMessageId: "seed-facebook-1",

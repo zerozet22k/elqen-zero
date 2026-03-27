@@ -8,6 +8,8 @@ const SERVER_START_CMD = process.env.SERVER_START_CMD || "npm run dev";
 const REHOOK_ON_START = process.env.REHOOK_ON_START !== "false";
 const REHOOK_WORKSPACE_ID = process.env.REHOOK_WORKSPACE_ID || "";
 const REHOOK_AUTH_TOKEN = process.env.REHOOK_AUTH_TOKEN || "";
+const ENV_PATH = path.resolve(process.cwd(), ".env");
+const ENV_EXAMPLE_PATH = path.resolve(process.cwd(), ".env.example");
 
 let cloudflared;
 let server;
@@ -33,8 +35,43 @@ function resolveCloudflaredCommand() {
   return "cloudflared";
 }
 
+function upsertPublicWebhookBaseUrl(publicUrl) {
+  if (!publicUrl) {
+    return;
+  }
+
+  if (!fs.existsSync(ENV_PATH) && fs.existsSync(ENV_EXAMPLE_PATH)) {
+    fs.copyFileSync(ENV_EXAMPLE_PATH, ENV_PATH);
+    console.log(`[env] created ${ENV_PATH} from .env.example`);
+  }
+
+  if (!fs.existsSync(ENV_PATH)) {
+    fs.writeFileSync(ENV_PATH, `PUBLIC_WEBHOOK_BASE_URL=${publicUrl}\n`, "utf8");
+    console.log(`[env] created ${ENV_PATH} with PUBLIC_WEBHOOK_BASE_URL`);
+    return;
+  }
+
+  const current = fs.readFileSync(ENV_PATH, "utf8");
+  const line = `PUBLIC_WEBHOOK_BASE_URL=${publicUrl}`;
+
+  if (/^PUBLIC_WEBHOOK_BASE_URL=.*$/m.test(current)) {
+    const updated = current.replace(/^PUBLIC_WEBHOOK_BASE_URL=.*$/m, line);
+    if (updated !== current) {
+      fs.writeFileSync(ENV_PATH, updated, "utf8");
+      console.log("[env] updated PUBLIC_WEBHOOK_BASE_URL in .env");
+    }
+    return;
+  }
+
+  const separator = current.endsWith("\n") ? "" : "\n";
+  fs.writeFileSync(ENV_PATH, `${current}${separator}${line}\n`, "utf8");
+  console.log("[env] appended PUBLIC_WEBHOOK_BASE_URL to .env");
+}
+
 function startServer(publicUrl) {
   if (server) return;
+
+  upsertPublicWebhookBaseUrl(publicUrl);
 
   const [cmd, ...args] = splitCommand(SERVER_START_CMD);
 

@@ -10,7 +10,7 @@ router.use(requireWorkspace);
 
 router.get(
   "/",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const query = auditLogQuerySchema.parse({
       ...req.query,

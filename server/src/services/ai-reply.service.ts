@@ -57,6 +57,7 @@ class AIReplyService {
       kind: string;
       text?: { body?: string };
       media?: Array<{ url?: string; filename?: string }>;
+      meta?: Record<string, unknown>;
       createdAt: Date;
     }>;
     workspaceAiOverride?: {
@@ -183,6 +184,7 @@ class AIReplyService {
       kind: string;
       text?: { body?: string };
       media?: Array<{ url?: string; filename?: string }>;
+      meta?: Record<string, unknown>;
       createdAt: Date;
     }>;
     knowledgeBundles: KnowledgeBundle[];
@@ -347,6 +349,7 @@ class AIReplyService {
       kind: string;
       text?: { body?: string };
       media?: Array<{ url?: string; filename?: string }>;
+      meta?: Record<string, unknown>;
       createdAt: Date;
     }>;
     knowledgeBundles: KnowledgeBundle[];
@@ -377,6 +380,23 @@ class AIReplyService {
         content = "[Location]";
       } else if (message.kind === "contact") {
         content = "[Contact]";
+      } else if (message.kind === "sticker") {
+        const meta = message.meta ?? {};
+        const keywords = Array.isArray(meta.lineStickerKeywords)
+          ? (meta.lineStickerKeywords as string[]).filter(Boolean).slice(0, 6).join(", ")
+          : "";
+        const packTitle =
+          typeof meta.lineStickerPackTitle === "string" ? meta.lineStickerPackTitle : "";
+        const emoji = message.text?.body?.trim() ?? "";
+        if (keywords) {
+          content = packTitle
+            ? `[Sticker expressing: "${keywords}" (${packTitle})]`
+            : `[Sticker expressing: "${keywords}"]`;
+        } else if (emoji) {
+          content = `[Sticker: ${emoji}]`;
+        } else {
+          content = "[Sticker]";
+        }
       } else {
         content = "[Unsupported]";
       }

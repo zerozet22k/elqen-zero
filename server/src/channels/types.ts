@@ -1,4 +1,4 @@
-export const CHANNELS = ["facebook", "telegram", "viber", "tiktok"] as const;
+export const CHANNELS = ["facebook", "instagram", "telegram", "viber", "tiktok", "line", "website"] as const;
 export const MESSAGE_KINDS = [
   "text",
   "image",
@@ -45,17 +45,45 @@ export const CONVERSATION_STATUSES = [
   "resolved",
 ] as const;
 
-export const CONVERSATION_AI_STATES = [
-  "idle",
-  "suggesting",
-  "auto_replied",
-  "needs_human",
-  "human_requested",
+export const CONVERSATION_ROUTING_STATES = [
+  "bot_active",
+  "human_pending",
   "human_active",
+] as const;
+
+export const ATTENTION_ITEM_STATES = [
+  "open",
+  "bot_replied",
+  "awaiting_human",
+  "human_replied",
+  "closed",
+] as const;
+
+export const ATTENTION_NEEDS_HUMAN_REASONS = [
+  "low_confidence",
+  "manual_request",
+  "customer_requested_human",
+  "policy_block",
+  "bot_failure",
+  "after_hours",
+  "other",
+] as const;
+
+export const ATTENTION_RESOLUTION_TYPES = [
+  "bot_reply",
+  "human_reply",
+  "auto_ack_only",
+  "ignored",
+  "merged_into_newer_item",
 ] as const;
 
 export const CHANNEL_CONNECTION_STATUSES = [
   "active",
+  "attention_required",
+  "restricted_due_to_plan",
+  "credentials_invalid",
+  "disconnected",
+  // Legacy persisted values tolerated while connections are normalized forward.
   "inactive",
   "pending",
   "error",
@@ -75,11 +103,24 @@ export type CanonicalSenderType = (typeof SENDER_TYPES)[number];
 export type CanonicalDirection = (typeof DIRECTIONS)[number];
 export type CanonicalDeliveryStatus = (typeof DELIVERY_STATUSES)[number];
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
-export type ConversationAIState = (typeof CONVERSATION_AI_STATES)[number];
+export type ConversationRoutingState = (typeof CONVERSATION_ROUTING_STATES)[number];
 export type ChannelConnectionStatus =
   (typeof CHANNEL_CONNECTION_STATUSES)[number];
 export type ChannelConnectionVerificationState =
   (typeof CHANNEL_CONNECTION_VERIFICATION_STATES)[number];
+export type AttentionItemState = (typeof ATTENTION_ITEM_STATES)[number];
+export type AttentionNeedsHumanReason =
+  (typeof ATTENTION_NEEDS_HUMAN_REASONS)[number];
+export type AttentionResolutionType =
+  (typeof ATTENTION_RESOLUTION_TYPES)[number];
+
+export interface MessageMetadata extends Record<string, unknown> {
+  actorUserId?: string | null;
+  actorRunId?: string | null;
+  inReplyToMessageId?: string | null;
+  attentionItemId?: string | null;
+  deliveryError?: string | null;
+}
 
 export interface CanonicalMedia {
   url?: string;
@@ -144,7 +185,7 @@ export interface CanonicalMessage {
   interactive?: CanonicalInteractivePayload;
   unsupportedReason?: string;
   raw: unknown;
-  meta?: Record<string, unknown>;
+  meta?: MessageMetadata;
   occurredAt?: Date;
   senderProfile?: SenderProfile;
 }
@@ -183,7 +224,7 @@ export interface OutboundCommand {
   location?: CanonicalLocation;
   contact?: CanonicalContactPayload;
   interactive?: CanonicalInteractivePayload;
-  meta?: Record<string, unknown>;
+  meta?: MessageMetadata;
   occurredAt?: Date;
 }
 

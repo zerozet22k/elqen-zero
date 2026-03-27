@@ -8,10 +8,28 @@ export type StickerPreview = {
 
 export type StickerCatalogItem = {
   id: string;
+  platformStickerId: string;
   label: string;
   description?: string;
   emoji?: string;
   preview?: StickerPreview;
+  providerMeta?: {
+    telegram?: {
+      fileId: string;
+      thumbnailFileId?: string;
+      isAnimated?: boolean;
+      isVideo?: boolean;
+    };
+    viber?: {
+      previewUrl?: string;
+    };
+    line?: {
+      packageId: string;
+      stickerResourceType?: string;
+      storeUrl?: string;
+      packTitle?: string;
+    };
+  };
 };
 
 export type StickerCatalog = {

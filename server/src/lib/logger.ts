@@ -13,15 +13,38 @@ const shouldLog = (level: LogLevel) => {
   return levelOrder[level] >= levelOrder[activeLevel];
 };
 
+const serializeMeta = (meta: unknown): unknown => {
+  if (meta instanceof Error) {
+    return {
+      name: meta.name,
+      message: meta.message,
+      stack: meta.stack,
+      ...(meta && typeof meta === "object" && "statusCode" in meta
+        ? {
+            statusCode: (meta as { statusCode?: unknown }).statusCode,
+          }
+        : {}),
+      ...(meta && typeof meta === "object" && "code" in meta
+        ? {
+            code: (meta as { code?: unknown }).code,
+          }
+        : {}),
+    };
+  }
+
+  return meta;
+};
+
 const write = (level: LogLevel, message: string, meta?: unknown) => {
   if (!shouldLog(level)) {
     return;
   }
 
+  const serializedMeta = serializeMeta(meta);
   const payload = {
     level,
     message,
-    ...(meta ? { meta } : {}),
+    ...(serializedMeta ? { meta: serializedMeta } : {}),
     timestamp: new Date().toISOString(),
   };
 

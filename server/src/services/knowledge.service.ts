@@ -231,6 +231,10 @@ class KnowledgeService {
     return KnowledgeItemModel.findById(id);
   }
 
+  async getByIdInWorkspace(id: string, workspaceId: string) {
+    return KnowledgeItemModel.findOne({ _id: id, workspaceId });
+  }
+
   async update(
     id: string,
     patch: {
@@ -243,8 +247,29 @@ class KnowledgeService {
     return KnowledgeItemModel.findByIdAndUpdate(id, { $set: patch }, { new: true });
   }
 
+  async updateInWorkspace(
+    id: string,
+    workspaceId: string,
+    patch: {
+      title?: string;
+      content?: string;
+      tags?: string[];
+      isActive?: boolean;
+    }
+  ) {
+    return KnowledgeItemModel.findOneAndUpdate(
+      { _id: id, workspaceId },
+      { $set: patch },
+      { new: true }
+    );
+  }
+
   async remove(id: string) {
     return KnowledgeItemModel.findByIdAndDelete(id);
+  }
+
+  async removeInWorkspace(id: string, workspaceId: string) {
+    return KnowledgeItemModel.findOneAndDelete({ _id: id, workspaceId });
   }
 
   async findBestMatch(workspaceId: string, queryText: string) {

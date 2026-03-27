@@ -1,4 +1,15 @@
 import { Conversation } from "../../types/models";
+import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
+import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
+import SouthRoundedIcon from "@mui/icons-material/SouthRounded";
+import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
+import PersonOutlineRoundedIcon from "@mui/icons-material/PersonOutlineRounded";
+import { PlatformIcons } from "../../utils/platform-icons";
+import {
+  getConversationAssignmentLabel,
+  getConversationHandlingLabel,
+  getConversationHandlingState,
+} from "./conversation-state";
 
 function getPreviewText(input?: string) {
   if (!input) {
@@ -18,44 +29,19 @@ function getPreviewText(input?: string) {
 }
 
 function ChannelIcon({ channel }: { channel: Conversation["channel"] }) {
-  const src =
-    channel === "telegram"
-      ? "/platform-icons/telegram.svg"
-      : channel === "facebook"
-        ? "/platform-icons/facebook.svg"
-        : channel === "viber"
-          ? "/platform-icons/viber.svg"
-          : "/platform-icons/tiktok.svg";
-
-  const fallback =
-    channel === "telegram"
-      ? "T"
-      : channel === "facebook"
-        ? "F"
-        : channel === "viber"
-          ? "V"
-          : "T";
+  const iconUrl = PlatformIcons.getIconUrl(channel);
 
   return (
     <span
       title={channel}
-      className="inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-slate-100"
+      className="inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-slate-600"
     >
       <img
-        src={src}
-        alt={channel}
-        className="h-full w-full object-cover"
-        onError={(event) => {
-          event.currentTarget.style.display = "none";
-          const sibling = event.currentTarget.nextElementSibling as HTMLElement | null;
-          if (sibling) {
-            sibling.style.display = "inline-flex";
-          }
-        }}
+        src={iconUrl}
+        alt=""
+        aria-hidden="true"
+        className="h-3.5 w-3.5 object-contain"
       />
-      <span className="hidden h-full w-full items-center justify-center text-[9px] font-semibold text-slate-600">
-        {fallback}
-      </span>
     </span>
   );
 }
@@ -73,39 +59,36 @@ function formatTime(date?: string | Date): string {
     : d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-const statusDotClass: Record<string, string> = {
-  open: "bg-blue-400",
-  pending: "bg-amber-400",
-  resolved: "bg-emerald-400",
-};
-
-function getActivityLabel(
-  conversation: Conversation,
-  currentUserId?: string | null
-) {
-  if (
-    conversation.aiState === "needs_human" ||
-    conversation.aiState === "human_requested"
-  ) {
-    return "Needs human";
+function getHandlingToneClass(handlingState: ReturnType<typeof getConversationHandlingState>) {
+  if (handlingState === "expired") {
+    return "text-rose-600";
   }
 
-  if (conversation.aiState === "human_active") {
-    if (conversation.assignee?._id && conversation.assignee._id === currentUserId) {
-      return "Managed by you";
-    }
-    return conversation.assignee?.name
-      ? `Managed by ${conversation.assignee.name}`
-      : "Human active";
+  if (handlingState === "paused") {
+    return "text-amber-600";
   }
 
-  if (conversation.assignee?.name?.trim()) {
-    return conversation.assignee._id === currentUserId
-      ? "Managed by you"
-      : `Managed by ${conversation.assignee.name}`;
+  if (handlingState === "pending_human") {
+    return "text-sky-600";
   }
 
-  return "";
+  return "text-slate-500";
+}
+
+function getHandlingIcon(handlingState: ReturnType<typeof getConversationHandlingState>) {
+  if (handlingState === "paused") {
+    return <ScheduleRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+
+  if (handlingState === "pending_human") {
+    return <GroupsRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+
+  if (handlingState === "expired") {
+    return <PersonOutlineRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+
+  return <SmartToyRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />;
 }
 
 export function ConversationList(props: {
@@ -150,7 +133,12 @@ export function ConversationList(props: {
           ])
         );
 
-        const activityLabel = getActivityLabel(conversation, props.currentUserId);
+        const handlingState = getConversationHandlingState(conversation);
+        const handlingLabel = getConversationHandlingLabel(conversation);
+        const assignmentLabel = getConversationAssignmentLabel(
+          conversation,
+          props.currentUserId
+        );
 
         return (
           <button
@@ -174,11 +162,6 @@ export function ConversationList(props: {
                   }}
                 />
               ) : null}
-              <span
-                className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white ${
-                  statusDotClass[conversation.status] ?? "bg-slate-300"
-                }`}
-              />
             </div>
 
             <div className="min-w-0 flex-1">
@@ -214,11 +197,20 @@ export function ConversationList(props: {
                 ) : null}
               </div>
 
-              {activityLabel ? (
-                <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                  {activityLabel}
-                </p>
-              ) : null}
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                <span
+                  className={[
+                    "inline-flex items-center gap-1 font-medium",
+                    getHandlingToneClass(handlingState),
+                  ].join(" ")}
+                >
+                  {getHandlingIcon(handlingState)}
+                  {handlingLabel}
+                </span>
+                {assignmentLabel ? (
+                  <span className="truncate text-slate-400">{assignmentLabel}</span>
+                ) : null}
+              </div>
             </div>
           </button>
         );

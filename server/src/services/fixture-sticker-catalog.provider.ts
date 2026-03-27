@@ -109,6 +109,7 @@ const parseTelegramFixtureCatalog = (raw: string): StickerCatalogSourceItem[] =>
     seen.add(id);
     items.push({
       id,
+      platformStickerId: id,
       label: humanizeSetName(sticker?.set_name) || "Telegram sticker",
       description: getTelegramStickerDescription(sticker),
       emoji: String(sticker?.emoji ?? "").trim() || undefined,
@@ -145,6 +146,7 @@ const parseViberFixtureCatalog = (raw: string): StickerCatalogSourceItem[] => {
     seen.add(id);
     items.push({
       id,
+      platformStickerId: id,
       label: `Sticker ${id}`,
       description: "Viber sticker",
       providerMeta: {

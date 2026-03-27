@@ -73,7 +73,14 @@ class OutboundContentExecutorService {
     conversation: {
       _id: string;
       workspaceId: string;
-      channel: "facebook" | "telegram" | "viber" | "tiktok";
+      channel:
+        | "facebook"
+        | "instagram"
+        | "telegram"
+        | "viber"
+        | "tiktok"
+        | "line"
+        | "website";
       channelAccountId: string;
     };
     senderType: SupportedOutboundSender;

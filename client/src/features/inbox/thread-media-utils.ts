@@ -16,6 +16,11 @@ export type RenderableMedia = {
   items: RenderableMediaItem[];
 };
 
+type LineStickerPreviewDecision = {
+  shouldRenderImage: boolean;
+  fallbackReason?: string;
+};
+
 const resolveMediaUrl = (url?: string | null) => {
   if (!url) {
     return null;
@@ -27,6 +32,22 @@ const resolveMediaUrl = (url?: string | null) => {
     return url;
   }
 };
+
+export function resolveLineStickerPreviewDecision(message: Message): LineStickerPreviewDecision {
+  if (message.channel !== "line" || message.kind !== "sticker") {
+    return { shouldRenderImage: true };
+  }
+
+  // Always try to render if a URL exists. The stickershop CDN proxy route returns
+  // verified image/* content or 404; the <img onError> handler hides failed loads.
+  const firstMedia = message.media?.[0];
+  const previewUrl = resolveMediaUrl(firstMedia?.storedAssetUrl ?? firstMedia?.url ?? null);
+  if (!previewUrl) {
+    return { shouldRenderImage: false, fallbackReason: "preview_url_missing" };
+  }
+
+  return { shouldRenderImage: true };
+}
 
 export function resolveRenderableMedia(message: Message): RenderableMedia {
   const items: RenderableMediaItem[] = (message.media ?? []).map((media) => {
@@ -68,6 +89,23 @@ export function resolveRenderableMedia(message: Message): RenderableMedia {
   });
 
   const first = items[0];
+  const lineStickerPreview = resolveLineStickerPreviewDecision(message);
+
+  if (!lineStickerPreview.shouldRenderImage) {
+    return {
+      preferredUrl: null,
+      isExpired: Boolean(first?.isExpired),
+      hasDurableCopy: Boolean(first?.hasDurableCopy),
+      items: items.map((item, index) =>
+        index === 0
+          ? {
+              ...item,
+              preferredUrl: null,
+            }
+          : item
+      ),
+    };
+  }
 
   return {
     preferredUrl: first?.preferredUrl ?? null,

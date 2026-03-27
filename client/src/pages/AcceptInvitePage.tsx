@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { apiRequest } from "../services/api";
 import { useSession } from "../hooks/use-session";
+import { WorkspaceRole } from "../types/models";
+import { formatWorkspaceRoleLabel } from "../utils/workspace-role";
 
 type InvitationInfo = {
   workspace: {
@@ -9,7 +11,7 @@ type InvitationInfo = {
     name: string;
     slug: string;
   };
-  role: "owner" | "admin" | "staff";
+  workspaceRole: WorkspaceRole;
   email: string;
   name: string;
   expiresAt: string;
@@ -79,7 +81,16 @@ export function AcceptInvitePage() {
   }, [invitation?.expiresAt]);
 
   if (session) {
-    return <Navigate to="/inbox" replace />;
+    return (
+      <Navigate
+        to={
+          token
+            ? `/account/workspaces?invite=${encodeURIComponent(token)}`
+            : "/account/workspaces"
+        }
+        replace
+      />
+    );
   }
 
   const handleSubmit = async (event: FormEvent) => {
@@ -140,7 +151,7 @@ export function AcceptInvitePage() {
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
             <p>
               You were invited to join <strong>{invitation.workspace.name}</strong> as{" "}
-              <strong>{invitation.role}</strong>.
+              <strong>{formatWorkspaceRoleLabel(invitation.workspaceRole)}</strong>.
             </p>
             <p className="mt-1">Email: {invitation.email}</p>
             {expirationLabel ? <p className="mt-1">Expires: {expirationLabel}</p> : null}

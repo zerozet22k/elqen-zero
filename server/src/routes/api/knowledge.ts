@@ -9,7 +9,6 @@ import {
 import { knowledgeService } from "../../services/knowledge.service";
 import { requireWorkspace } from "../../middleware/require-workspace";
 import { requireRole } from "../../middleware/require-role";
-import { ForbiddenError } from "../../lib/errors";
 
 const router = Router();
 router.use(requireWorkspace);
@@ -25,7 +24,7 @@ router.get(
 
 router.post(
   "/",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const payload = createKnowledgeItemSchema.parse({
       ...req.body,
@@ -40,13 +39,12 @@ router.get(
   "/:id",
   asyncHandler(async (req, res) => {
     const { id } = objectIdParamSchema.parse(req.params);
-    const item = await knowledgeService.getById(id);
+    const item = await knowledgeService.getByIdInWorkspace(
+      id,
+      String(req.workspace?._id ?? "")
+    );
     if (!item) {
       throw new NotFoundError("Knowledge item not found");
-    }
-
-    if (String(item.workspaceId) !== String(req.workspace?._id)) {
-      throw new ForbiddenError("Knowledge item does not belong to active workspace");
     }
 
     res.json({ item });
@@ -55,11 +53,15 @@ router.get(
 
 router.patch(
   "/:id",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const { id } = objectIdParamSchema.parse(req.params);
     const patch = updateKnowledgeItemSchema.parse(req.body);
-    const item = await knowledgeService.update(id, patch);
+    const item = await knowledgeService.updateInWorkspace(
+      id,
+      String(req.workspace?._id ?? ""),
+      patch
+    );
     if (!item) {
       throw new NotFoundError("Knowledge item not found");
     }
@@ -70,10 +72,13 @@ router.patch(
 
 router.delete(
   "/:id",
-  requireRole(["owner", "admin"]),
+  requireRole(["admin"]),
   asyncHandler(async (req, res) => {
     const { id } = objectIdParamSchema.parse(req.params);
-    const item = await knowledgeService.remove(id);
+    const item = await knowledgeService.removeInWorkspace(
+      id,
+      String(req.workspace?._id ?? "")
+    );
     if (!item) {
       throw new NotFoundError("Knowledge item not found");
     }

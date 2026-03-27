@@ -24,6 +24,8 @@ export interface OutboundStickerBlock {
   channel?: OutboundContentBlockChannel;
   sticker: {
     platformStickerId: string;
+    packageId?: string;
+    stickerResourceType?: string;
     label?: string;
     description?: string;
     emoji?: string;

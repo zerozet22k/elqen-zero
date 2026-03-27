@@ -34,9 +34,12 @@ const aiSettingsSchema = new Schema(
     assistantModel: { type: String, default: "" },
     supportedChannels: {
       facebook: { type: Boolean, default: true },
+      instagram: { type: Boolean, default: true },
       telegram: { type: Boolean, default: true },
       viber: { type: Boolean, default: true },
       tiktok: { type: Boolean, default: true },
+      line: { type: Boolean, default: true },
+      website: { type: Boolean, default: true },
     },
   },
   {

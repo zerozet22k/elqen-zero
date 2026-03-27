@@ -10,7 +10,8 @@ type RealtimeEventName =
   | "message.sent"
   | "message.failed"
   | "connection.updated"
-  | "presence.updated";
+  | "presence.updated"
+  | "user.updated";
 
 type RealtimePayload = {
   workspaceId: string;
@@ -194,4 +195,40 @@ export const emitRealtimeEvent = (
   }
 
   io.to(getWorkspaceRoom(payload.workspaceId)).emit(event, payload);
+};
+
+export const syncRealtimeUserProfile = (params: {
+  userId: string;
+  userName: string;
+}) => {
+  const userId = params.userId.trim();
+  const userName = params.userName.trim();
+  if (!userId || !userName) {
+    return;
+  }
+
+  const affectedConversations = new Map<string, Set<string>>();
+
+  for (const state of socketPresenceState.values()) {
+    if (state.userId !== userId) {
+      continue;
+    }
+
+    state.userName = userName;
+
+    if (!state.workspaceId || !state.conversationId) {
+      continue;
+    }
+
+    const workspaceConversations =
+      affectedConversations.get(state.workspaceId) ?? new Set<string>();
+    workspaceConversations.add(state.conversationId);
+    affectedConversations.set(state.workspaceId, workspaceConversations);
+  }
+
+  for (const [workspaceId, conversationIds] of affectedConversations.entries()) {
+    for (const conversationId of conversationIds) {
+      emitConversationPresence(workspaceId, conversationId);
+    }
+  }
 };

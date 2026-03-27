@@ -1,0 +1,180 @@
+
+===== 2026-03-24T05:13:45.762Z =====
+{
+  "destination": "U822ffb018ef54ddd0c81d8f19b4252f6",
+  "events": [
+    {
+      "type": "message",
+      "message": {
+        "type": "text",
+        "id": "606492871071367521",
+        "quoteToken": "jhuaQ1_2NiiRYNsaPY6sVXMU_7tO5NYXK0jp80asQ8_KL2s8BXM4NpFEcPvWBkmpKMvM9Ukz75eOI4sR36kHC3iXAm5Du_9iO-8sytusiRzJN0mx8cJ7xjlJYwSsWh-mXQC2F6yeCnYW1cr5RBYWKg",
+        "markAsReadToken": "VyM60XLEFE8K9Fxox7hApiLN2s6kVydEBmi8M4n0pbLviB60fQowFC5ZmdhtNtUwdQ8jpaXcwQJk3XBRNIYOIPf0pGKRxh8jt-dbUvoMRLc5vZA1uEgiDfO2q_aSUYeMDWw6lBfoO8R2ZTJ6iQAEJxSDmR-5540buvgR9lScgOaojGtjS3J5tMEVSmd9QzF9HiNipvNvchPCWPSxxkylaQ",
+        "text": "Hi"
+      },
+      "webhookEventId": "01KMF46RHKZTMVJ7Q58Z4849J5",
+      "deliveryContext": {
+        "isRedelivery": false
+      },
+      "timestamp": 1774329225584,
+      "source": {
+        "type": "user",
+        "userId": "U57b50ff18d230925fdc5c3a12a9c6c81"
+      },
+      "replyToken": "0f6d5c39c7704830919985dff249e7eb",
+      "mode": "active"
+    }
+  ]
+}
+
+===== 2026-03-24T05:14:09.833Z =====
+{
+  "destination": "U822ffb018ef54ddd0c81d8f19b4252f6",
+  "events": [
+    {
+      "type": "message",
+      "message": {
+        "type": "sticker",
+        "id": "606492912746234402",
+        "quoteToken": "pKjvhZF87Z_wKLViY2FHndfslyKLqc7_f_mruba9Dut88yQu75OtItG8O1RY1-KOTLzShEppAdKHG9SB1snZBsiuh0ORLDTqya3jbMCCsszImxyILlxEDqunJDg2ERc5Aouj0ajjNJS3FpIj5CBjbg",
+        "markAsReadToken": "TQXScEg9J4LEeLnxAp6sD-rc03l87oFURy4SaWUc3PO3y1H0DJD2-v1INYedJwwYXOkXwzDLclTtBTCEiTRTsYTslGhU-1-RWPYUEHrt6XEBMPTz4Uay-oCTZNNBROM5zkXxtHbYCHF0Jw1zj9-e7pFdj-88kD6a08gWLqoMfMsR3835kHKfSgQU5bMi-PYAD2RVlpWLB3BV7mQl8qEvXQ",
+        "stickerId": "51626494",
+        "packageId": "11538",
+        "stickerResourceType": "ANIMATION",
+        "keywords": [
+          "Hello",
+          "greetings",
+          "helloeveryone",
+          "line",
+          "hi",
+          "hey",
+          "helloboys",
+          "yo",
+          "See ya",
+          "moon",
+          "What's up?",
+          "heybro",
+          "heygirl",
+          "howdy",
+          "Bye"
+        ]
+      },
+      "webhookEventId": "01KMF47GNDFWKRA6FYDGZXD38T",
+      "deliveryContext": {
+        "isRedelivery": false
+      },
+      "timestamp": 1774329250245,
+      "source": {
+        "type": "user",
+        "userId": "U57b50ff18d230925fdc5c3a12a9c6c81"
+      },
+      "replyToken": "1dc78dc8eb68454fa810c913f457a4fd",
+      "mode": "active"
+    }
+  ]
+}
+
+===== 2026-03-24T06:48:41.259Z =====
+{
+  "destination": "U822ffb018ef54ddd0c81d8f19b4252f6",
+  "events": [
+    {
+      "type": "message",
+      "message": {
+        "type": "image",
+        "id": "606502425897468143",
+        "quoteToken": "hc8sh3Xg_hMsR8M4M23n4KHEEqJM1FgA3VFEWFGSSj3ELR8RbmKOHgviGD65tMZoY6c1qDR5GRnjiwkTN0N04ERlJcPzp7ka-ZyA3CiQPxPw7FCrNhqxUjjZC3ESWp-2E0qD_DeuiOLdFAwDoIytiw",
+        "markAsReadToken": "d6XMjVoGURReKVqCkq2TQvOvLO5aeJkG7LPFTufJedSgrqEZNyW0BCs5QZK9UwrbIBVJ-2eNx54GGTUVgf7p0qQ-XE-oZJm68nBXBzZOTkmroxH4ivDyN10gaIB3dhGFLaV5tjWTEAb5jKtbNdzXOpbjzNpXW6ex0vob51SbmU-_tOUl6-ac4mCzguO9Rzb4qJLtu-UPG9DLQYU6P4GiSQ",
+        "contentProvider": {
+          "type": "line"
+        }
+      },
+      "webhookEventId": "01KMF9MJGM5F0GAEZF8ZC6QRDK",
+      "deliveryContext": {
+        "isRedelivery": false
+      },
+      "timestamp": 1774334920788,
+      "source": {
+        "type": "user",
+        "userId": "U57b50ff18d230925fdc5c3a12a9c6c81"
+      },
+      "replyToken": "e3c63e0e7d5c4328aca9a98db9d81719",
+      "mode": "active"
+    }
+  ]
+}
+
+===== 2026-03-26T03:09:58.934Z =====
+{
+  "destination": "U822ffb018ef54ddd0c81d8f19b4252f6",
+  "events": [
+    {
+      "type": "message",
+      "message": {
+        "type": "text",
+        "id": "606770320556425221",
+        "quoteToken": "oUT4ZS75WNHzsf280pOAURWuRYnrCF2gmVu9qmpw2Q_t930olb1L5WqoApEtkd47K7MyawwIf-7k3jUBX4aEXqrBMH84lcymRZFzBoTkcFuXO759UNyPp_ceqAQASvkOrIPBw8K4xZ_7e8xoM2qP8w",
+        "markAsReadToken": "fBBKzAeexG0C06WYjnCHclx_ykxSnnO2R5EZy6-UVjYPO_nJx21MDytd51Q1pdX3z1sb5U9NjjL5GbUYRM1IP8Bje7BSpd4riZzI5_EU5FoLTwYx98ZHnpdCVL7KFAWUT890qtGyc0zB4gH1dHZTqWL95pYfwEnRXDGXo6QsTyQjZmVGwblnHWgybNNE8bmlZVPct8HpE5T651yCYxIMoA",
+        "text": "Hi"
+      },
+      "webhookEventId": "01KMM1XH7MB87NDDZEMG7FHCVD",
+      "deliveryContext": {
+        "isRedelivery": false
+      },
+      "timestamp": 1774494598236,
+      "source": {
+        "type": "user",
+        "userId": "U57b50ff18d230925fdc5c3a12a9c6c81"
+      },
+      "replyToken": "994bafb587a24a579e4279822692374e",
+      "mode": "active"
+    }
+  ]
+}
+
+===== 2026-03-26T03:14:27.734Z =====
+{
+  "destination": "U822ffb018ef54ddd0c81d8f19b4252f6",
+  "events": [
+    {
+      "type": "message",
+      "message": {
+        "type": "sticker",
+        "id": "606770771243041228",
+        "quoteToken": "JVguKTqG3ZZs13-QfpsNhZ7d_LjhWP914h7SlPqIV1nU-3ELe9w1S5scz5ORD6Q2iUa97yHWa2kevkH3oGI-fazfyphbJSvd3mZ7DNXKKQABB7SAaYp9P76UYqWqJlMeFzyAYyiBR5JxH6cW7VjkDg",
+        "markAsReadToken": "zoFeky_kk1-Am_RE_dYLllt6pOpUezo2devI9xEpWHOR37jVs7l-p64Dt_8XR4a3p4aYU2Bx8_DKaovBTdUquUg3u02-Eee-aPx6zkr3ZRIAjniSzY8lwTMaM5ZgG2ClvYdzvB_gltbQJLrBh8n6GDiVsNsBxfcuZhfIDyL7gJbFu6Y9jMlxv2p40RjLCOyCKlcSWTbg-IahOG6GDTYS_A",
+        "stickerId": "51626495",
+        "packageId": "11538",
+        "stickerResourceType": "ANIMATION",
+        "keywords": [
+          "snuggle",
+          "hug",
+          "Heart",
+          "treasure",
+          "infatuate",
+          "choco",
+          "Love you",
+          "embrace",
+          "loved",
+          "hug me",
+          "Affection",
+          "cuddle",
+          "loveit",
+          "lovestruck",
+          "line"
+        ]
+      },
+      "webhookEventId": "01KMM25QPDGG9W48NZSRNJQSYN",
+      "deliveryContext": {
+        "isRedelivery": false
+      },
+      "timestamp": 1774494866812,
+      "source": {
+        "type": "user",
+        "userId": "U57b50ff18d230925fdc5c3a12a9c6c81"
+      },
+      "replyToken": "ad9d59b01f534ffbb7dc9a053d68f952",
+      "mode": "active"
+    }
+  ]
+}

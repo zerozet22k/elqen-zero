@@ -1,4 +1,27 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
+import ViewSidebarRoundedIcon from "@mui/icons-material/ViewSidebarRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import PersonOutlineRoundedIcon from "@mui/icons-material/PersonOutlineRounded";
+import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
+import SouthRoundedIcon from "@mui/icons-material/SouthRounded";
+import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
+import LanguageRoundedIcon from "@mui/icons-material/LanguageRounded";
+import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
+import PersonOffRoundedIcon from "@mui/icons-material/PersonOffRounded";
+import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
+import TelegramIcon from "@mui/icons-material/Telegram";
+import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
+import MusicNoteRoundedIcon from "@mui/icons-material/MusicNoteRounded";
+import AlternateEmailRoundedIcon from "@mui/icons-material/AlternateEmailRounded";
+import { PlatformIcons } from "../utils/platform-icons";
 import { useSession } from "../hooks/use-session";
 import { apiRequest } from "../services/api";
 import { connectWorkspaceSocket } from "../services/realtime";
@@ -9,6 +32,7 @@ import {
 } from "../utils/inbound-notification";
 import {
   AISettings,
+  AttentionItem,
   CannedReply,
   ChannelConnection,
   Contact,
@@ -19,9 +43,20 @@ import {
   MessageKind,
 } from "../types/models";
 import { OutboundContentBlock } from "../types/outbound-content";
-import { Composer, ComposerSendPayload } from "../features/inbox/Composer";
+import {
+  Composer,
+  ComposerSendPayload,
+  ComposerSendStickerPayload,
+} from "../features/inbox/Composer";
 import { ContactPanel } from "../features/inbox/ContactPanel";
 import { ConversationList } from "../features/inbox/ConversationList";
+import {
+  type InboxHandlingState,
+  getConversationAssignmentLabel,
+  getConversationAssignmentState,
+  getConversationHandlingState,
+  getConversationHandlingLabel,
+} from "../features/inbox/conversation-state";
 import {
   getComposerDisabledReason,
   isConnectionUsableForSending,
@@ -30,33 +65,28 @@ import {
 import { StickerCatalog } from "../features/inbox/sticker-catalog";
 import { ThreadView } from "../features/inbox/ThreadView";
 import { ToastItem, ToastStack } from "../features/ui/ToastStack";
+import { isWorkspaceAdminRole } from "../utils/workspace-role";
 
 type StatusFilter = ConversationStatus | "all";
-type ManagementFilter =
-  | "all"
-  | "assigned_to_me"
-  | "staff_managed"
-  | "bot_managed";
+type AssignmentFilter = "all" | "mine" | "others" | "unassigned";
 
-const statusOptions: StatusFilter[] = [
-  "all",
-  "open",
-  "pending",
-  "resolved",
-];
+const statusOptions: StatusFilter[] = ["all", "open", "pending", "resolved"];
 
-const managementOptions: ManagementFilter[] = [
+const assignmentOptions: AssignmentFilter[] = [
   "all",
-  "assigned_to_me",
-  "staff_managed",
-  "bot_managed",
+  "mine",
+  "others",
+  "unassigned",
 ];
 
 const defaultSupportedChannels: Record<Conversation["channel"], boolean> = {
   facebook: true,
+  instagram: true,
   telegram: true,
   viber: true,
   tiktok: true,
+  line: true,
+  website: true,
 };
 
 function sortConversationsByLatest(items: Conversation[]) {
@@ -81,183 +111,165 @@ function isConversationStatus(value: StatusFilter): value is ConversationStatus 
   return value === "open" || value === "pending" || value === "resolved";
 }
 
-function getStatusFilterLabel(value: StatusFilter) {
-  if (value === "all") return "All";
-  if (value === "open") return "Open";
-  if (value === "pending") return "Pending";
-  if (value === "resolved") return "Resolved";
-  return value;
+const statusFilterUiMap: Record<
+  StatusFilter,
+  {
+    label: string;
+    shortLabel: string;
+    icon: (className?: string) => ReactNode;
+  }
+> = {
+  all: {
+    label: "All",
+    shortLabel: "All",
+    icon: (className = "h-3.5 w-3.5") => (
+      <ViewSidebarRoundedIcon className={className} aria-hidden="true" />
+    ),
+  },
+  open: {
+    label: "Open",
+    shortLabel: "Open",
+    icon: (className = "h-3.5 w-3.5") => (
+      <ChatRoundedIcon className={className} aria-hidden="true" />
+    ),
+  },
+  pending: {
+    label: "Pending",
+    shortLabel: "Pending",
+    icon: (className = "h-3.5 w-3.5") => (
+      <ScheduleRoundedIcon className={className} aria-hidden="true" />
+    ),
+  },
+  resolved: {
+    label: "Resolved",
+    shortLabel: "Resolved",
+    icon: (className = "h-3.5 w-3.5") => (
+      <TaskAltRoundedIcon className={className} aria-hidden="true" />
+    ),
+  },
+};
+
+function getStatusFilterUi(value: StatusFilter) {
+  return statusFilterUiMap[value];
 }
 
-function getChannelIconSrc(channel: Conversation["channel"]) {
-  return `/platform-icons/${channel}.svg`;
+const filterChipClassMap = {
+  track: "flex w-full items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1",
+  textButton:
+    "inline-flex h-8 min-w-0 flex-1 items-center justify-center rounded-full px-2 text-[11px] font-semibold transition",
+  iconButton:
+    "inline-flex h-8 min-w-0 flex-1 items-center justify-center rounded-full text-xs font-semibold transition",
+  active: "bg-slate-900 text-white",
+  inactive: "text-slate-500 hover:bg-white hover:text-slate-900",
+} as const;
+
+function getFilterChipButtonClass(active: boolean, variant: "text" | "icon") {
+  return [
+    variant === "text" ? filterChipClassMap.textButton : filterChipClassMap.iconButton,
+    active ? filterChipClassMap.active : filterChipClassMap.inactive,
+  ].join(" ");
 }
 
-function getActivityTone(aiState?: Conversation["aiState"]) {
-  if (aiState === "human_active") {
-    return "bg-sky-50 text-sky-700";
+function renderChannelIcon(channel: Conversation["channel"], className: string) {
+  return (
+    <img
+      src={PlatformIcons.getIconUrl(channel)}
+      alt={channel}
+      className={className}
+      aria-hidden="true"
+    />
+  );
+}
+
+function getActivityTone(handlingState: InboxHandlingState) {
+  if (handlingState === "expired") {
+    return "bg-rose-50 text-rose-700";
   }
 
-  if (aiState === "needs_human" || aiState === "human_requested") {
+  if (handlingState === "paused") {
     return "bg-amber-50 text-amber-700";
+  }
+
+  if (handlingState === "pending_human") {
+    return "bg-sky-50 text-sky-700";
   }
 
   return "bg-slate-100 text-slate-700";
 }
 
-function getActivityIcon(aiState?: Conversation["aiState"]) {
-  if (aiState === "human_active") {
-    return (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-3.5 w-3.5" aria-hidden="true">
-        <circle cx="12" cy="8" r="3" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 19a6 6 0 0 1 12 0" />
-      </svg>
-    );
+function getActivityIcon(handlingState: InboxHandlingState) {
+  if (handlingState === "paused") {
+    return <ScheduleRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />;
   }
 
-  if (aiState === "needs_human" || aiState === "human_requested") {
-    return (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-3.5 w-3.5" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v9" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 9.5 3.5 3.5 3.5-3.5" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 19h14" />
-      </svg>
-    );
+  if (handlingState === "pending_human") {
+    return <GroupsRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />;
   }
 
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-3.5 w-3.5" aria-hidden="true">
-      <rect x="7" y="3.5" width="10" height="7" rx="1.5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 11v3" />
-      <rect x="5" y="14" width="14" height="6.5" rx="2" />
-    </svg>
-  );
+  if (handlingState === "expired") {
+    return <PersonOutlineRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+
+  return <SmartToyRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />;
 }
 
-function getManagementFilterLabel(value: ManagementFilter) {
-  if (value === "all") return "All Ownership";
-  if (value === "assigned_to_me") return "Assigned to Me";
-  if (value === "staff_managed") return "Staff Managed";
-  if (value === "bot_managed") return "Bot Managed";
-  return value;
-}
-
-function getManagementFilterShortLabel(value: ManagementFilter) {
-  if (value === "all") return "All";
-  if (value === "assigned_to_me") return "Mine";
-  if (value === "staff_managed") return "Staff";
-  if (value === "bot_managed") return "Bot";
-  return value;
-}
-
-function renderManagementFilterIcon(value: ManagementFilter) {
-  if (value === "all") {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.8}
-        className="h-3.5 w-3.5"
-        aria-hidden="true"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h16" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16" />
-      </svg>
-    );
+const assignmentFilterUiMap: Record<
+  AssignmentFilter,
+  {
+    label: string;
+    shortLabel: string;
+    icon: (className?: string) => ReactNode;
   }
+> = {
+  all: {
+    label: "All Assignments",
+    shortLabel: "All",
+    icon: (className = "h-3.5 w-3.5") => (
+      <AddRoundedIcon className={className} aria-hidden="true" />
+    ),
+  },
+  mine: {
+    label: "Assigned to Me",
+    shortLabel: "Mine",
+    icon: (className = "h-3.5 w-3.5") => (
+      <PersonOutlineRoundedIcon className={className} aria-hidden="true" />
+    ),
+  },
+  others: {
+    label: "Other Staff",
+    shortLabel: "Others",
+    icon: (className = "h-3.5 w-3.5") => (
+      <GroupsRoundedIcon className={className} aria-hidden="true" />
+    ),
+  },
+  unassigned: {
+    label: "Unassigned",
+    shortLabel: "Free",
+    icon: (className = "h-3.5 w-3.5") => (
+      <PersonOffRoundedIcon className={className} aria-hidden="true" />
+    ),
+  },
+};
 
-  if (value === "assigned_to_me") {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.8}
-        className="h-3.5 w-3.5"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="8" r="3" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 19a6 6 0 0 1 12 0" />
-      </svg>
-    );
-  }
-
-  if (value === "staff_managed") {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.8}
-        className="h-3.5 w-3.5"
-        aria-hidden="true"
-      >
-        <circle cx="9" cy="9" r="2.5" />
-        <circle cx="15.5" cy="10.5" r="2" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 18a4.5 4.5 0 0 1 9 0" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      className="h-3.5 w-3.5"
-      aria-hidden="true"
-    >
-      <rect x="7" y="3.5" width="10" height="7" rx="1.5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 11v3" />
-      <rect x="5" y="14" width="14" height="6.5" rx="2" />
-    </svg>
-  );
+function getAssignmentFilterUi(value: AssignmentFilter) {
+  return assignmentFilterUiMap[value];
 }
 
 function applySidebarConversationFilter(
   items: Conversation[],
   statusFilter: StatusFilter,
-  managementFilter: ManagementFilter,
+  assignmentFilter: AssignmentFilter,
   currentUserId?: string | null
 ) {
   const filtered = items.filter((item) => {
-    const assigneeId = item.assignee?._id ?? item.assigneeUserId ?? null;
+    const matchesStatus = statusFilter === "all" ? true : item.status === statusFilter;
 
-    const matchesStatus =
-      statusFilter === "all" ? true : item.status === statusFilter;
-
-    const matchesManagement =
-      managementFilter === "all"
+    const matchesAssignment =
+      assignmentFilter === "all"
         ? true
-        : managementFilter === "assigned_to_me"
-          ? !!currentUserId && assigneeId === currentUserId
-          : managementFilter === "staff_managed"
-            ? !!assigneeId
-            : !assigneeId;
+        : getConversationAssignmentState(item, currentUserId) === assignmentFilter;
 
-    if (!matchesStatus || !matchesManagement) {
-      return false;
-    }
-
-    if (managementFilter === "assigned_to_me") {
-      return !!currentUserId && assigneeId === currentUserId;
-    }
-
-    if (managementFilter === "staff_managed") {
-      return !!assigneeId;
-    }
-
-    if (managementFilter === "bot_managed") {
-      return !assigneeId;
-    }
-
-    return true;
+    return matchesStatus && matchesAssignment;
   });
 
   return sortConversationsByLatest(filtered);
@@ -316,6 +328,20 @@ type SendConversationMessageResponse = {
   deliveries?: OutboundDeliverySummary[];
 };
 
+type AttentionItemActionResponse = {
+  conversation: Conversation;
+  currentAttentionItem?: AttentionItem | null;
+};
+
+type WorkspaceMemberDirectoryResponse = {
+  items: Array<{
+    user: {
+      _id: string;
+      name: string;
+    } | null;
+  }>;
+};
+
 function getFailedDeliveryMessage(response: SendConversationMessageResponse) {
   const collectedDeliveries: OutboundDeliverySummary[] = [
     ...(Array.isArray(response.deliveries) ? response.deliveries : []),
@@ -346,17 +372,26 @@ export function InboxPage() {
   const currentUserId = session?.user?._id ?? null;
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [managementFilter, setManagementFilter] = useState<ManagementFilter>("all");
+  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConversationId, setSelectedConversationId] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedConversationId = searchParams.get("c") ?? "";
+  const setSelectedConversationId = useCallback(
+    (id: string) => {
+      setSearchParams(id ? { c: id } : {}, { replace: true });
+    },
+    [setSearchParams]
+  );
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connections, setConnections] = useState<ChannelConnection[]>([]);
   const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
+  const [isAttentionActionSubmitting, setIsAttentionActionSubmitting] = useState(false);
+  const [attentionActionError, setAttentionActionError] = useState<string | null>(null);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(true);
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false);
   const [conversationPresence, setConversationPresence] = useState<
@@ -377,6 +412,7 @@ export function InboxPage() {
   const [supportedChannels, setSupportedChannels] = useState<
     Record<Conversation["channel"], boolean>
   >(defaultSupportedChannels);
+  const [workspaceMemberNames, setWorkspaceMemberNames] = useState<Record<string, string>>({});
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [notificationsMuted, setNotificationsMuted] = useState(() => {
     if (typeof window === "undefined") {
@@ -452,6 +488,32 @@ export function InboxPage() {
   const visibleViewers = selectedConversationPresence;
   const activeComposers = selectedConversationPresence.filter((entry) => entry.isComposing);
 
+  const messageSenderNames = useMemo(() => {
+    const next: Record<string, string> = {
+      ...workspaceMemberNames,
+    };
+
+    if (session?.user?._id && session.user.name?.trim()) {
+      next[session.user._id] = session.user.name.trim();
+    }
+
+    for (const conversation of conversations) {
+      if (conversation.assignee?._id && conversation.assignee.name?.trim()) {
+        next[conversation.assignee._id] = conversation.assignee.name.trim();
+      }
+    }
+
+    for (const viewers of Object.values(conversationPresence)) {
+      for (const viewer of viewers) {
+        if (viewer.userId && viewer.userName?.trim()) {
+          next[viewer.userId] = viewer.userName.trim();
+        }
+      }
+    }
+
+    return next;
+  }, [conversationPresence, conversations, session?.user?._id, session?.user?.name, workspaceMemberNames]);
+
   useEffect(() => {
     selectedConversationIdRef.current = selectedConversationId;
   }, [selectedConversationId]);
@@ -470,7 +532,7 @@ export function InboxPage() {
         workspaceId,
         status: isConversationStatus(statusFilter) ? statusFilter : undefined,
         assigneeUserId:
-          managementFilter === "assigned_to_me" ? currentUserId ?? undefined : undefined,
+          assignmentFilter === "mine" ? currentUserId ?? undefined : undefined,
         search: search || undefined,
       }
     );
@@ -479,11 +541,11 @@ export function InboxPage() {
       applySidebarConversationFilter(
         response.items,
         statusFilter,
-        managementFilter,
+        assignmentFilter,
         currentUserId
       )
     );
-  }, [workspaceId, statusFilter, managementFilter, currentUserId, search]);
+  }, [workspaceId, statusFilter, assignmentFilter, currentUserId, search]);
 
   const loadConnections = useCallback(async () => {
     if (!workspaceId) return;
@@ -536,7 +598,7 @@ export function InboxPage() {
               workspaceId,
               status: isConversationStatus(statusFilter) ? statusFilter : undefined,
               assigneeUserId:
-                managementFilter === "assigned_to_me"
+                assignmentFilter === "mine"
                   ? currentUserId ?? undefined
                   : undefined,
               search: search || undefined,
@@ -560,7 +622,7 @@ export function InboxPage() {
           applySidebarConversationFilter(
             conversationResponse.items,
             statusFilter,
-            managementFilter,
+            assignmentFilter,
             currentUserId
           )
         );
@@ -586,7 +648,67 @@ export function InboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, statusFilter, managementFilter, currentUserId, search]);
+  }, [workspaceId, statusFilter, assignmentFilter, currentUserId, search]);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      setWorkspaceMemberNames({});
+      return;
+    }
+
+    if (!isWorkspaceAdminRole(activeWorkspace?.workspaceRole)) {
+      setWorkspaceMemberNames(
+        session?.user?._id && session.user.name?.trim()
+          ? { [session.user._id]: session.user.name.trim() }
+          : {}
+      );
+      return;
+    }
+
+    let cancelled = false;
+
+    void apiRequest<WorkspaceMemberDirectoryResponse>(
+      `/api/workspaces/${workspaceId}/members`
+    )
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        const next: Record<string, string> = {};
+        for (const item of response.items) {
+          const userId = item.user?._id?.trim();
+          const userName = item.user?.name?.trim();
+          if (userId && userName) {
+            next[userId] = userName;
+          }
+        }
+
+        if (session?.user?._id && session.user.name?.trim()) {
+          next[session.user._id] = session.user.name.trim();
+        }
+
+        setWorkspaceMemberNames(next);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWorkspaceMemberNames(
+            session?.user?._id && session.user.name?.trim()
+              ? { [session.user._id]: session.user.name.trim() }
+              : {}
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeWorkspace?.workspaceRole,
+    session?.user?._id,
+    session?.user?.name,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -683,7 +805,11 @@ export function InboxPage() {
 
     const stickerChannel = channel;
 
-    if (stickerChannel !== "telegram" && stickerChannel !== "viber") {
+    if (
+      stickerChannel !== "telegram" &&
+      stickerChannel !== "viber" &&
+      stickerChannel !== "line"
+    ) {
       setStickerCatalog({
         channel: stickerChannel,
         supported: false,
@@ -828,8 +954,8 @@ export function InboxPage() {
         description:
           relatedConversation?.assignee?.name && currentUserId
             ? relatedConversation.assignee._id === currentUserId
-              ? "This chat is managed by you"
-              : `Managed by ${relatedConversation.assignee.name}`
+              ? "Assigned to you"
+              : `Assigned to ${relatedConversation.assignee.name}`
             : "Unassigned chat",
         tone: "info",
       });
@@ -871,6 +997,45 @@ export function InboxPage() {
         current && current._id === nextContactId ? nextContact : current
       );
     });
+    socket.on("user.updated", (payload: unknown) => {
+      const normalized =
+        typeof payload === "object" && payload
+          ? (payload as {
+              user?: {
+                _id?: string;
+                name?: string;
+                avatarUrl?: string | null;
+              };
+            })
+          : {};
+
+      const userId = normalized.user?._id?.trim();
+      const userName = normalized.user?.name?.trim();
+      if (!userId || !userName) {
+        return;
+      }
+
+      setWorkspaceMemberNames((current) =>
+        current[userId] === userName ? current : { ...current, [userId]: userName }
+      );
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.assignee?._id === userId
+            ? {
+                ...conversation,
+                assignee: {
+                  ...conversation.assignee,
+                  name: userName,
+                  avatarUrl:
+                    typeof normalized.user?.avatarUrl === "string"
+                      ? normalized.user.avatarUrl
+                      : conversation.assignee.avatarUrl,
+                },
+              }
+            : conversation
+        )
+      );
+    });
     socket.on("presence.updated", (payload: unknown) => {
       const normalized =
         typeof payload === "object" && payload
@@ -900,6 +1065,7 @@ export function InboxPage() {
       socket.off("message.failed", refreshThread);
       socket.off("connection.updated", refreshConnections);
       socket.off("contact.updated");
+      socket.off("user.updated");
       socket.off("presence.updated");
       socket.disconnect();
     };
@@ -1124,12 +1290,12 @@ export function InboxPage() {
   };
 
   const handleSendSticker = useCallback(
-    async (platformStickerId: string) => {
+    async (payload: ComposerSendStickerPayload) => {
       if (!selectedConversationId) {
         return;
       }
 
-      const normalizedStickerId = platformStickerId.trim();
+      const normalizedStickerId = payload.platformStickerId.trim();
       if (
         selectedConversation?.channel === "telegram" &&
         /^AgAD[A-Za-z0-9_-]+$/.test(normalizedStickerId)
@@ -1168,6 +1334,22 @@ export function InboxPage() {
         return;
       }
 
+      if (selectedConversation?.channel === "line" && !payload.packageId?.trim()) {
+          const message =
+            "LINE sticker sending requires both a sticker ID and a package ID. Add the sticker through Workspace Stickers first.";
+        if (shouldPersistSendError({ message, selectedConnection })) {
+          setSendError(message);
+        } else {
+          setSendError("");
+        }
+        pushToast({
+          title: "Missing LINE sticker package",
+          description: message,
+          tone: "warn",
+        });
+        return;
+      }
+
       if (
         selectedConversation &&
         supportedChannels[selectedConversation.channel] === false
@@ -1199,6 +1381,11 @@ export function InboxPage() {
                   channel: selectedConversation?.channel ?? undefined,
                   sticker: {
                     platformStickerId: normalizedStickerId,
+                    packageId: payload.packageId,
+                    stickerResourceType: payload.stickerResourceType,
+                    label: payload.label,
+                    description: payload.description,
+                    emoji: payload.emoji,
                   },
                 },
               ],
@@ -1237,6 +1424,7 @@ export function InboxPage() {
 
   const handleConversationUpdated = useCallback(
     (updatedConversation: Conversation) => {
+      setAttentionActionError(null);
       setConversations((current) =>
         sortConversationsByLatest(
           current.map((item) =>
@@ -1285,6 +1473,38 @@ export function InboxPage() {
       active,
     });
   }, []);
+
+  const runConversationAttentionAction = useCallback(
+    async (actionPath: string, fallbackMessage: string) => {
+      if (!selectedConversation) {
+        return;
+      }
+
+      try {
+        setIsAttentionActionSubmitting(true);
+        setAttentionActionError(null);
+
+        const response = await apiRequest<AttentionItemActionResponse>(actionPath, {
+          method: "POST",
+        });
+
+        const updatedConversation: Conversation = {
+          ...response.conversation,
+          currentAttentionItem: response.currentAttentionItem ?? null,
+          currentAttentionItemId: response.currentAttentionItem?._id ?? null,
+        };
+
+        handleConversationUpdated(updatedConversation);
+      } catch (error) {
+        setAttentionActionError(
+          error instanceof Error ? error.message : fallbackMessage
+        );
+      } finally {
+        setIsAttentionActionSubmitting(false);
+      }
+    },
+    [handleConversationUpdated, selectedConversation]
+  );
 
   const handleStatusUpdate = useCallback(
     async (nextStatus: ConversationStatus) => {
@@ -1460,16 +1680,46 @@ export function InboxPage() {
   const replyingByLabel = activeComposers
     .map((entry) => (entry.userId === session?.user?._id ? "You" : entry.userName))
     .join(", ");
-  const activityLabel = selectedConversation
-    ? selectedConversation.aiState === "human_active"
-      ? selectedConversation.assignee?.name
-        ? `Managed by ${selectedConversation.assignee.name}`
-        : "Staff Active"
-      : selectedConversation.aiState === "needs_human" ||
-          selectedConversation.aiState === "human_requested"
-        ? "Needs Staff"
-        : "Bot Active"
-    : "Bot Active";
+  const selectedConversationHandlingState = selectedConversation
+    ? getConversationHandlingState(selectedConversation)
+    : "bot";
+  const handlingLabel = selectedConversation
+    ? getConversationHandlingLabel(selectedConversation)
+    : "Bot active";
+  const assignmentLabel = selectedConversation
+    ? getConversationAssignmentLabel(selectedConversation, session?.user?._id ?? null)
+    : null;
+  const composerAiControl = selectedConversation
+    ? selectedConversationHandlingState === "bot"
+      ? {
+          primaryLabel: isAttentionActionSubmitting ? "Updating..." : "Pause 1h",
+          onPrimary: () =>
+            runConversationAttentionAction(
+              `/api/conversations/${selectedConversation._id}/pause-bot`,
+              "Failed to pause AI"
+            ),
+          disabled: isAttentionActionSubmitting,
+        }
+      : selectedConversationHandlingState === "paused" ||
+          selectedConversationHandlingState === "expired"
+        ? {
+            primaryLabel: isAttentionActionSubmitting ? "Updating..." : "Extend 1h",
+            onPrimary: () =>
+              runConversationAttentionAction(
+                `/api/conversations/${selectedConversation._id}/pause-bot`,
+                "Failed to extend AI pause"
+              ),
+            secondaryLabel: isAttentionActionSubmitting ? "Updating..." : "Resume",
+            onSecondary: () =>
+              runConversationAttentionAction(
+                `/api/conversations/${selectedConversation._id}/resume-bot`,
+                "Failed to resume bot"
+              ),
+            disabled: isAttentionActionSubmitting,
+            secondaryDisabled: isAttentionActionSubmitting,
+          }
+        : null
+    : null;
 
   if (!workspaceId) {
     return (
@@ -1519,18 +1769,10 @@ export function InboxPage() {
 
           <div className="px-4">
             <div className="relative">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
+              <SearchRoundedIcon
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
                 aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
-                <circle cx="11" cy="11" r="6" />
-              </svg>
+              />
               <input
                 placeholder="Search..."
                 value={searchInput}
@@ -1541,46 +1783,46 @@ export function InboxPage() {
           </div>
 
           <div className="px-4 pt-4">
-            <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 p-1">
-              {statusOptions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setStatusFilter(option)}
-                  className={[
-                    "h-8 rounded-full px-3 text-xs font-semibold transition",
-                    statusFilter === option
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-500 hover:bg-white hover:text-slate-900",
-                  ].join(" ")}
-                  aria-pressed={statusFilter === option}
-                >
-                  {getStatusFilterLabel(option)}
-                </button>
-              ))}
+            <div className={filterChipClassMap.track}>
+              {statusOptions.map((option) => {
+                const ui = getStatusFilterUi(option);
+                const isActive = statusFilter === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setStatusFilter(option)}
+                    className={getFilterChipButtonClass(isActive, "icon")}
+                    aria-pressed={isActive}
+                    aria-label={ui.label}
+                    title={ui.label}
+                  >
+                    {ui.icon()}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div className="px-4 pb-4 pt-2">
-            <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 p-1">
-              {managementOptions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setManagementFilter(option)}
-                  className={[
-                    "inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition",
-                    managementFilter === option
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-500 hover:bg-white hover:text-slate-900",
-                  ].join(" ")}
-                  aria-pressed={managementFilter === option}
-                  aria-label={getManagementFilterLabel(option)}
-                  title={getManagementFilterLabel(option)}
-                >
-                  {renderManagementFilterIcon(option)}
-                </button>
-              ))}
+            <div className={filterChipClassMap.track}>
+              {assignmentOptions.map((option) => {
+                const ui = getAssignmentFilterUi(option);
+                const isActive = assignmentFilter === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setAssignmentFilter(option)}
+                    className={getFilterChipButtonClass(isActive, "icon")}
+                    aria-pressed={isActive}
+                    aria-label={ui.label}
+                    title={ui.label}
+                  >
+                    {ui.icon()}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1614,12 +1856,7 @@ export function InboxPage() {
                       title={selectedConversation.channel}
                       aria-label={selectedConversation.channel}
                     >
-                      <img
-                        src={getChannelIconSrc(selectedConversation.channel)}
-                        alt=""
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5 object-contain"
-                      />
+                      {renderChannelIcon(selectedConversation.channel, "h-3.5 w-3.5")}
                     </span>
                   ) : null}
                 </div>
@@ -1629,27 +1866,27 @@ export function InboxPage() {
                     <span
                       className={[
                         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium",
-                        getActivityTone(selectedConversation.aiState),
+                        getActivityTone(selectedConversationHandlingState),
                       ].join(" ")}
                     >
-                      {getActivityIcon(selectedConversation.aiState)}
-                      {activityLabel}
+                      {getActivityIcon(selectedConversationHandlingState)}
+                      {handlingLabel}
                     </span>
+                    {assignmentLabel ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
+                        <PersonOutlineRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                        {assignmentLabel}
+                      </span>
+                    ) : null}
                     {viewedByLabel ? (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-3.5 w-3.5" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
-                          <circle cx="12" cy="12" r="2.5" />
-                        </svg>
+                        <VisibilityRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />
                         Viewed By: {viewedByLabel}
                       </span>
                     ) : null}
                     {replyingByLabel ? (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-3.5 w-3.5" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v7A2.5 2.5 0 0 1 17.5 17H10l-4.5 3V17H6.5A2.5 2.5 0 0 1 4 14.5v-7Z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h6M9 13h4" />
-                        </svg>
+                        <ChatBubbleOutlineRoundedIcon className="h-3.5 w-3.5" aria-hidden="true" />
                         Replying: {replyingByLabel}
                       </span>
                     ) : null}
@@ -1691,23 +1928,7 @@ export function InboxPage() {
                   aria-label={isInspectorCollapsed ? "Show inspector" : "Hide inspector"}
                   title={isInspectorCollapsed ? "Show inspector" : "Hide inspector"}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.8}
-                    className="h-4 w-4"
-                    aria-hidden="true"
-                  >
-                    <rect x="3.75" y="4.75" width="16.5" height="14.5" rx="2.25" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.5 5v14" />
-                    {isInspectorCollapsed ? (
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m11 12-2.5-2.5m2.5 2.5L8.5 14.5" />
-                    ) : (
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m10 12 2.5-2.5M10 12l2.5 2.5" />
-                    )}
-                  </svg>
+                  <ViewSidebarRoundedIcon className="h-4 w-4" aria-hidden="true" />
                 </button>
 
                 <button
@@ -1723,21 +1944,7 @@ export function InboxPage() {
                   aria-label="Delete chat user and messages"
                   title="Delete chat user"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.8}
-                    className="h-4 w-4"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18" />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m-9 0 1 14a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-14"
-                    />
-                  </svg>
+                  <DeleteOutlineRoundedIcon className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -1756,6 +1963,8 @@ export function InboxPage() {
               <div className="h-full px-1 py-1">
                 <ThreadView
                   messages={messages}
+                  currentUserId={session?.user?._id ?? null}
+                  senderNamesByUserId={messageSenderNames}
                   replyingByLabel={replyingByLabel || null}
                 />
               </div>
@@ -1768,6 +1977,8 @@ export function InboxPage() {
                 disabled={isSending || !selectedConversationId || !!composerDisabledReason}
                 disabledReason={composerDisabledReason}
                 error={sendError}
+                aiControl={composerAiControl}
+                aiControlError={attentionActionError}
                 channel={selectedConversation?.channel ?? null}
                 cannedReplies={cannedReplies}
                 stickerCatalog={stickerCatalog}
@@ -1800,17 +2011,7 @@ export function InboxPage() {
                 aria-label="Collapse inspector"
                 title="Collapse inspector"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.8}
-                  className="h-4 w-4"
-                  aria-hidden="true"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m14.5 7-5 5 5 5" />
-                </svg>
+                <ChevronLeftRoundedIcon className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 
@@ -1846,16 +2047,7 @@ export function InboxPage() {
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Close details"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  className="h-4 w-4"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <CloseRoundedIcon className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 

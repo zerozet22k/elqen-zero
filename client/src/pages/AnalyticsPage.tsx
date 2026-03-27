@@ -146,7 +146,15 @@ export function AnalyticsPage() {
     const pending = items.filter((item) => item.status === "pending").length;
     const resolved = items.filter((item) => item.status === "resolved").length;
 
-    const channels = ["facebook", "telegram", "viber", "tiktok"] as const;
+    const channels = [
+      "facebook",
+      "instagram",
+      "telegram",
+      "viber",
+      "tiktok",
+      "line",
+      "website",
+    ] as const;
 
     const byChannel = channels.map((channel) => {
       const total = items.filter((item) => item.channel === channel).length;

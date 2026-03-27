@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { logger } from "../../lib/logger";
 
 const router = Router();
 
@@ -18,14 +19,28 @@ router.get("/callback", (req, res) => {
   const state = trimString(req.query.state);
   const error = trimString(req.query.error);
   const errorDescription = trimString(req.query.error_description);
+  const status = error ? "error" : "success";
 
   const payload = {
     source: "facebook-oauth",
+    type: "facebook-oauth-result",
+    status,
     code,
     state,
     error,
     errorDescription,
+    timestamp: new Date().toISOString(),
   };
+
+  logger.info("Facebook OAuth callback received", {
+    status,
+    hasCode: !!code,
+    state,
+    error: error || null,
+    errorDescription: errorDescription || null,
+    origin: req.headers.origin || null,
+    referer: req.headers.referer || null,
+  });
 
   res.type("html").send(`<!doctype html>
 <html lang="en">

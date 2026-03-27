@@ -2,6 +2,7 @@ import axios from "axios";
 import { BaseChannelAdapter } from "./base.adapter";
 import { CanonicalMessage, ChannelCapabilities } from "./types";
 import { env } from "../config/env";
+import { logger } from "../lib/logger";
 
 type FacebookWebhook = {
   object?: string;
@@ -108,8 +109,16 @@ export class FacebookAdapter extends BaseChannelAdapter {
   async parseInbound(reqBody: unknown): Promise<CanonicalMessage[]> {
     const body = reqBody as FacebookWebhook;
     if (body.object !== "page") {
+      logger.warn("Facebook inbound ignored due to unexpected object type", {
+        object: body.object || null,
+      });
       return [];
     }
+
+    logger.info("Facebook inbound webhook received", {
+      object: body.object,
+      entryCount: Array.isArray(body.entry) ? body.entry.length : 0,
+    });
 
     const messages: CanonicalMessage[] = [];
 
@@ -279,6 +288,10 @@ export class FacebookAdapter extends BaseChannelAdapter {
       }
     }
 
+    logger.info("Facebook inbound webhook normalized", {
+      normalizedMessages: messages.length,
+    });
+
     return messages;
   }
 
@@ -301,6 +314,9 @@ export class FacebookAdapter extends BaseChannelAdapter {
 
     const pageAccessToken = trimString(input.connection.credentials.pageAccessToken);
     if (!pageAccessToken) {
+      logger.warn("Facebook outbound send failed due to missing page token", {
+        externalChatId: input.conversation.externalChatId,
+      });
       return {
         status: "failed" as const,
         error: "Missing Facebook page access token",
@@ -309,6 +325,10 @@ export class FacebookAdapter extends BaseChannelAdapter {
     }
 
     try {
+      logger.info("Facebook outbound send starting", {
+        externalChatId: input.conversation.externalChatId,
+      });
+
       const response = await axios.post(
         "https://graph.facebook.com/v19.0/me/messages",
         request,
@@ -326,6 +346,10 @@ export class FacebookAdapter extends BaseChannelAdapter {
         request,
       };
     } catch (error) {
+      logger.error("Facebook outbound send failed", {
+        externalChatId: input.conversation.externalChatId,
+        error: error instanceof Error ? error.message : error,
+      });
       return this.buildFailedSendResult(error, request);
     }
   }

@@ -8,8 +8,18 @@ import {
   MessageModel,
 } from "../models";
 import { CanonicalMessage } from "../channels/types";
+import { logger } from "../lib/logger";
 
 class ContactService {
+  private isUnknownName(value: unknown) {
+    if (typeof value !== "string") {
+      return true;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return !normalized || normalized === "unknown" || normalized === "unknown contact";
+  }
+
   private normalizePhone(value: string) {
     return value.replace(/\s+/g, " ").trim();
   }
@@ -38,8 +48,9 @@ class ContactService {
       },
     });
 
-    const displayName =
-      message.senderProfile?.displayName ?? message.contact?.name ?? "Unknown";
+    const resolvedDisplayName =
+      message.senderProfile?.displayName?.trim() || message.contact?.name?.trim() || "";
+    const displayName = resolvedDisplayName || "Unknown";
     const username = message.senderProfile?.username;
     const avatar = message.senderProfile?.avatar;
     const phone = message.contact?.phone;
@@ -50,9 +61,13 @@ class ContactService {
           current.channel === identity.channel &&
           current.externalUserId === identity.externalUserId
         ) {
+          const currentDisplayName =
+            typeof current.displayName === "string" ? current.displayName : "";
           return {
             ...current.toObject(),
-            displayName: displayName || current.displayName,
+            displayName:
+              resolvedDisplayName ||
+              (!this.isUnknownName(currentDisplayName) ? currentDisplayName : "Unknown"),
             username: username || current.username,
             avatar: avatar || current.avatar,
           };
@@ -62,17 +77,28 @@ class ContactService {
       });
 
       existing.set("channelIdentities", identities);
-      if (displayName && existing.primaryName === "Unknown contact") {
-        existing.primaryName = displayName;
+      if (resolvedDisplayName && this.isUnknownName(existing.primaryName)) {
+        existing.primaryName = resolvedDisplayName;
       }
       if (phone && !existing.phones.includes(phone)) {
         existing.phones = this.normalizePhoneList([...existing.phones, phone]);
       }
+
       await existing.save();
+
+      logger.info("Contact identity persisted from inbound message", {
+        contactId: String(existing._id),
+        workspaceId,
+        channel: message.channel,
+        externalUserId: message.externalSenderId,
+        displayName: resolvedDisplayName || null,
+        avatarPersisted: !!avatar,
+      });
+
       return existing;
     }
 
-    return ContactModel.create({
+    const created = await ContactModel.create({
       workspaceId,
       channelIdentities: [
         {
@@ -85,6 +111,17 @@ class ContactService {
       primaryName: displayName,
       phones: phone ? this.normalizePhoneList([phone]) : [],
     });
+
+    logger.info("Contact created from inbound message", {
+      contactId: String(created._id),
+      workspaceId,
+      channel: message.channel,
+      externalUserId: message.externalSenderId,
+      displayName: resolvedDisplayName || null,
+      avatarPersisted: !!avatar,
+    });
+
+    return created;
   }
 
   async getById(id: string) {
