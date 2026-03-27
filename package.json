@@ -4,7 +4,15 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "dev:public": "concurrently \"npm run dev:public --prefix server\" \"npm run dev --prefix client\""
+    "dev:public": "concurrently \"npm run dev:public --prefix server\" \"npm run dev --prefix client\"",
+    "docker:build": "node scripts/build-images.mjs",
+    "docker:build:client": "node scripts/build-images.mjs client",
+    "docker:build:server": "node scripts/build-images.mjs server",
+    "docker:up": "node scripts/docker-compose.mjs up -d",
+    "docker:down": "node scripts/docker-compose.mjs down",
+    "docker:down:volumes": "node scripts/docker-compose.mjs down -v",
+    "docker:ps": "node scripts/docker-compose.mjs ps",
+    "docker:logs": "node scripts/docker-compose.mjs logs -f"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

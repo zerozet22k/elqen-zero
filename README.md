@@ -100,6 +100,26 @@ npm run test --prefix client
 npm run test --prefix server
 ```
 
+### Local Docker Image Builds
+
+If Docker Desktop is installed, you can build the deployable images locally from the repo root:
+
+```bash
+npm run docker:build
+```
+
+This builds:
+
+- `elqen-zero-server-local`
+- `elqen-zero-client-local`
+
+You can also build one service at a time:
+
+```bash
+npm run docker:build:server
+npm run docker:build:client
+```
+
 ## Deployment
 
 This repo is prepared for Railway as two services from one GitHub repository:
@@ -120,6 +140,49 @@ The client production server serves the built `dist` folder directly, so Railway
 Both `client/` and `server/` now include a `Dockerfile` for more reliable Railway builds when each service points at the correct root directory.
 
 See [docs/deploy-railway.md](docs/deploy-railway.md) for the full Railway setup, required variables, and deploy order.
+
+## Full Local Docker Stack
+
+You can run MongoDB, Redis, the API server, and the client together with Docker Compose.
+
+1. Copy the local compose env example:
+
+```powershell
+Copy-Item .env.compose.example .env
+```
+
+2. Start the full stack:
+
+```bash
+docker compose up --build
+```
+
+If `docker` is not on your Windows `PATH` yet, you can use the repo wrappers instead:
+
+```bash
+npm run docker:up
+```
+
+3. Open:
+
+- client: `http://localhost:3000`
+- server health: `http://localhost:4000/health`
+
+Compose services:
+
+- `mongo`
+- `redis`
+- `server`
+- `client`
+
+Helpful wrappers:
+
+```bash
+npm run docker:ps
+npm run docker:logs
+npm run docker:down
+npm run docker:down:volumes
+```
 
 ## Environment Notes
 

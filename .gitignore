@@ -39,6 +39,7 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+.VSCodeCounter/
 *.swp
 *.swo
 
