@@ -5,6 +5,7 @@ import { logger } from "./logger";
 
 type BullMQConnectionOptions = RedisOptions & {
   maxRetriesPerRequest: null;
+  skipVersionCheck?: boolean;
 };
 
 type RedisConfig = {
@@ -40,6 +41,21 @@ let hasBoundSharedRedisEvents = false;
 let missingConfigWarned = false;
 let bullMqCompatibility: boolean | null = null;
 let bullMqCompatibilityPromise: Promise<boolean> | null = null;
+let redisRuntimeInfo:
+  | {
+      redisVersion: string | null;
+      redisOs: string | null;
+      maxMemoryPolicy: string | null;
+    }
+  | null = null;
+let redisRuntimeInfoPromise:
+  | Promise<{
+      redisVersion: string | null;
+      redisOs: string | null;
+      maxMemoryPolicy: string | null;
+    }>
+  | null = null;
+let bullMqEvictionPolicyWarned = false;
 
 const parseRedisInfoSection = (rawInfo: string) => {
   return rawInfo.split(/\r?\n/).reduce<Record<string, string>>((acc, line) => {
@@ -119,6 +135,74 @@ const bindSharedRedisEvents = (client: IORedis) => {
   client.on("close", () => {
     logger.warn("Redis connection closed");
   });
+};
+
+const loadRedisRuntimeInfo = async (client: IORedis) => {
+  if (redisRuntimeInfo) {
+    return redisRuntimeInfo;
+  }
+
+  if (!redisRuntimeInfoPromise) {
+    redisRuntimeInfoPromise = (async () => {
+      let redisVersion: string | null = null;
+      let redisOs: string | null = null;
+      let maxMemoryPolicy: string | null = null;
+
+      try {
+        const serverInfo = parseRedisInfoSection(await client.info("server"));
+        redisVersion = serverInfo.redis_version ?? null;
+        redisOs = serverInfo.os ?? null;
+      } catch {
+        // Best-effort diagnostics only.
+      }
+
+      try {
+        const memoryInfo = parseRedisInfoSection(await client.info("memory"));
+        maxMemoryPolicy = memoryInfo.maxmemory_policy ?? null;
+      } catch {
+        // Best-effort diagnostics only.
+      }
+
+      redisRuntimeInfo = {
+        redisVersion,
+        redisOs,
+        maxMemoryPolicy,
+      };
+
+      return redisRuntimeInfo;
+    })().finally(() => {
+      redisRuntimeInfoPromise = null;
+    });
+  }
+
+  return redisRuntimeInfoPromise;
+};
+
+const warnIfBullMqEvictionPolicyNeedsAttention = (runtimeInfo: {
+  redisVersion: string | null;
+  redisOs: string | null;
+  maxMemoryPolicy: string | null;
+}) => {
+  const maxMemoryPolicy = runtimeInfo.maxMemoryPolicy?.trim().toLowerCase() ?? "";
+  if (!maxMemoryPolicy || maxMemoryPolicy === "noeviction" || bullMqEvictionPolicyWarned) {
+    return;
+  }
+
+  bullMqEvictionPolicyWarned = true;
+  logger.warn(
+    'Redis eviction policy is not ideal for BullMQ; queue reliability may degrade under memory pressure',
+    {
+      maxMemoryPolicy: runtimeInfo.maxMemoryPolicy,
+      expectedPolicy: "noeviction",
+      redisVersion: runtimeInfo.redisVersion,
+      redisOs: runtimeInfo.redisOs,
+    }
+  );
+};
+
+const shouldSkipBullMqVersionCheck = () => {
+  const maxMemoryPolicy = redisRuntimeInfo?.maxMemoryPolicy?.trim().toLowerCase() ?? "";
+  return !!maxMemoryPolicy && maxMemoryPolicy !== "noeviction";
 };
 
 export const isRedisConfigured = () => {
@@ -205,6 +289,11 @@ export const closeRedis = async () => {
   sharedRedisClient = null;
   sharedRedisReadyPromise = null;
   hasBoundSharedRedisEvents = false;
+  bullMqCompatibility = null;
+  bullMqCompatibilityPromise = null;
+  redisRuntimeInfo = null;
+  redisRuntimeInfoPromise = null;
+  bullMqEvictionPolicyWarned = false;
   await client.quit();
 };
 
@@ -228,16 +317,10 @@ export const ensureBullMqCompatibleRedisRuntime = async () => {
         return false;
       }
 
-      let redisVersion: string | null = null;
-      let redisOs: string | null = null;
-
-      try {
-        const serverInfo = parseRedisInfoSection(await client.info("server"));
-        redisVersion = serverInfo.redis_version ?? null;
-        redisOs = serverInfo.os ?? null;
-      } catch {
-        // Best-effort diagnostics only.
-      }
+      const runtimeInfo = await loadRedisRuntimeInfo(client);
+      const redisVersion = runtimeInfo.redisVersion;
+      const redisOs = runtimeInfo.redisOs;
+      warnIfBullMqEvictionPolicyNeedsAttention(runtimeInfo);
 
       const probeKey = `bullmq:compat:${randomUUID()}`;
 
@@ -276,6 +359,7 @@ export const buildBullMQConnectionOptions = (): BullMQConnectionOptions | null =
   const base: BullMQConnectionOptions = {
     ...buildBaseRedisOptions(),
     maxRetriesPerRequest: null,
+    skipVersionCheck: shouldSkipBullMqVersionCheck(),
   };
 
   if (redisConfig.url) {

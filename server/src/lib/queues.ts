@@ -63,7 +63,6 @@ type QueueDefinition<TPayload, TResult = unknown> = {
 };
 
 const queuePrefix = env.BULLMQ_PREFIX.trim() || "omni-chat";
-const sharedConnection = buildBullMQConnectionOptions();
 const workerSet = new Set<Worker>();
 const queueDefinitions = {
   inboundWebhooks: {
@@ -129,7 +128,7 @@ const queueDefinitions = {
 };
 
 const isQueueingAvailable = () =>
-  isRedisConfigured() && !!sharedConnection && isBullMqCompatibleRedisRuntime();
+  isRedisConfigured() && !!buildBullMQConnectionOptions() && isBullMqCompatibleRedisRuntime();
 
 const bindWorkerEvents = (worker: Worker, queueName: string) => {
   worker.on("completed", (job) => {
@@ -158,8 +157,13 @@ const getQueue = <TPayload, TResult = unknown>(
   }
 
   if (!definition.queue) {
+    const connection = buildBullMQConnectionOptions();
+    if (!connection) {
+      return null;
+    }
+
     definition.queue = new Queue<TPayload, TResult>(definition.name, {
-      connection: sharedConnection!,
+      connection,
       prefix: queuePrefix,
       defaultJobOptions: definition.defaultJobOptions,
     });
@@ -176,8 +180,13 @@ const getQueueEvents = <TPayload, TResult = unknown>(
   }
 
   if (!definition.queueEvents) {
+    const connection = buildBullMQConnectionOptions();
+    if (!connection) {
+      return null;
+    }
+
     definition.queueEvents = new QueueEvents(definition.name, {
-      connection: sharedConnection!,
+      connection,
       prefix: queuePrefix,
     });
   }
@@ -275,8 +284,13 @@ const createWorker = <TPayload, TResult = unknown>(
     return null;
   }
 
+  const connection = buildBullMQConnectionOptions();
+  if (!connection) {
+    return null;
+  }
+
   const worker = new Worker<TPayload, TResult>(definition.name, processor, {
-    connection: sharedConnection!,
+    connection,
     prefix: queuePrefix,
     concurrency,
   });
