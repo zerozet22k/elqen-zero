@@ -2,6 +2,10 @@
 
 Elqen Zero is a multi-workspace omni-channel business inbox for real customer operations. Businesses can connect messaging channels, manage customer conversations in one workspace-first inbox, and publish customer-facing website chat pages without mixing public routes into the internal app.
 
+## Project Summary
+
+This is the strongest commercial-style project in the portfolio. It shows a full client/server architecture with realtime messaging, channel webhooks, workspace roles, AI-assisted replies, billing foundations, Redis-backed coordination, and operational dashboard flows.
+
 ## Current Product Surface
 
 - Internal workspace app under `/workspace/:slug/...`
@@ -18,6 +22,18 @@ Elqen Zero is a multi-workspace omni-channel business inbox for real customer op
 - `client`: React 18, Vite, TypeScript, MUI, Tailwind, Socket.IO client
 - `server`: Express, TypeScript, Socket.IO, MongoDB/Mongoose, Redis, BullMQ, Stripe, Zod
 - Data model: MongoDB is the source of truth; Redis is used for fast coordination, queueing, idempotency, and short-lived state
+
+## Code Evidence
+
+- `client/src` contains the workspace UI, public customer chat pages, portal shell, realtime client, and route helpers.
+- `server/src/routes/webhooks` contains channel webhook entry points.
+- `server/src/services` contains business logic for conversations, contacts, channels, automation, billing, AI replies, media, and audit logs.
+- `server/src/lib` contains Redis, queues, realtime, crypto, rate limiting, locks, and idempotency helpers.
+- `server/src/tests` contains focused service and queue tests.
+
+## My Role
+
+Built independently as a full-stack SaaS-style product, covering frontend workspaces, backend services, data modeling, realtime flows, webhook architecture, AI features, billing foundations, and deployment setup.
 
 ## Repo Layout
 
@@ -205,6 +221,10 @@ The canonical examples live in:
 - Internal app routes are workspace-first.
 - Public customer chat stays separate from internal workspace routes.
 - Redis is a coordination layer, not the long-term business record store.
+
+## Screenshots / Demo
+
+Screenshots and live demo links can be added here before sending the portfolio to a university or scholarship reviewer.
 
 ## License
 

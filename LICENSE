@@ -1,39 +1,9 @@
-# Elqen Zero
+All Rights Reserved
 
-Elqen Zero is a commercial omni-channel customer communication platform built to manage business conversations across multiple messaging channels in one unified system.
+Copyright (c) 2026 zerozet22k
 
-It combines a shared inbox, channel integrations, AI-assisted replies, after-hours automation, knowledge-based response workflows, canned replies, conversation states, audit logs, and human handoff controls for real operational use.
+This repository is provided for portfolio, review, and reference purposes only.
 
-## Features
+You may view the source code and project structure for evaluation and learning, but you may not copy, modify, distribute, sublicense, sell, publish, deploy, or use substantial portions of this project without prior written permission from the author.
 
-- Unified inbox for multi-channel customer conversations
-- Canonical message model across different platforms
-- AI-assisted and knowledge-based replies
-- Canned reply matching
-- Confidence-aware automation decisions
-- After-hours automation with business hour controls
-- Human escalation, takeover, and return-to-bot flows
-- Contact and conversation management
-- Assignment, tags, filters, and conversation history
-- Automation audit logs and oversight controls
-- Support for channels such as Facebook, Telegram, Viber, and TikTok
-
-## Use Cases
-
-- Education service support
-- Social-commerce inbox operations
-- Product support teams
-- Customer service and sales chat handling
-- Businesses needing one inbox for multiple messaging channels
-
-## Suggested Stack
-
-- Node.js
-- TypeScript
-- MongoDB
-- React or Next.js
-- Gemini or another LLM provider
-
-## License
-
-All rights reserved. This source code is not licensed for public reuse, redistribution, resale, or deployment without prior written permission from the author.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
